@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Touch Grass — WebGL</title>
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #040a01; }
+canvas { display: block; width: 100%; height: 100%; }
+
+#ui-panels {
+  position: fixed;
+  top: 0; left: 0;
+  width: 220px;
+  z-index: 10;
+  font-family: system-ui, sans-serif;
+}
+#wind-panel, #interaction-panel {
+  background: rgba(4, 10, 2, 0.78);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-right: 1px solid rgba(255,255,255,0.07);
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+#wind-panel-toggle, #interaction-panel-toggle {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-align: left;
+  color: rgba(255,255,255,0.45);
+}
+#wind-panel-toggle:hover, #interaction-panel-toggle:hover { color: rgba(255,255,255,0.7); }
+#wind-panel-body, #interaction-panel-body {
+  padding: 0 16px 16px;
+}
+#wind-panel.collapsed #wind-panel-body,
+#interaction-panel.collapsed #interaction-panel-body {
+  display: none;
+}
+.ctrl { margin-bottom: 9px; }
+.ctrl:last-child { margin-bottom: 0; }
+.ctrl-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 3px;
+}
+.ctrl-label {
+  font-size: 11px;
+  color: rgba(255,255,255,0.55);
+}
+.ctrl-val {
+  font-size: 10px;
+  font-family: 'Courier New', monospace;
+  color: rgba(255,255,255,0.85);
+  min-width: 36px;
+  text-align: right;
+}
+#ui-panels input[type=range] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 2px;
+  background: rgba(255,255,255,0.14);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+#ui-panels input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: #5aaa28;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+#ui-panels input[type=range]::-moz-range-thumb {
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: #5aaa28;
+  border: none;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+
+#mute-btn {
+  position: fixed;
+  bottom: 12px;
+  right: 12px;
+  padding: 8px 14px;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 2px;
+  background: rgba(4, 10, 2, 0.78);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  font-family: system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: rgba(255,255,255,0.45);
+  cursor: pointer;
+  z-index: 10;
+}
+#mute-btn:hover { color: rgba(255,255,255,0.7); }
+
+#fullscreen-btn {
+  position: fixed;
+  bottom: 48px;
+  right: 12px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 2px;
+  background: rgba(4, 10, 2, 0.78);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1;
+  color: rgba(255,255,255,0.45);
+  cursor: pointer;
+  z-index: 10;
+}
+#fullscreen-btn:hover { color: rgba(255,255,255,0.7); }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://esm.sh/three@0.169.0"
+  }
+}
+</script>
+</head>
+<body>
+
+<div id="ui-panels">
+<div id="wind-panel" class="collapsed">
+  <button type="button" id="wind-panel-toggle">WIND ▸</button>
+  <div id="wind-panel-body">
+  <div class="ctrl">
+    <div class="ctrl-top"><span class="ctrl-label">Wind Speed</span><span class="ctrl-val" id="v-w-spd">0.75</span></div>
+    <input type="range" id="s-w-spd" min="0" max="3" value="0.75" step="0.05">
+  </div>
+  <div class="ctrl">
+    <div class="ctrl-top"><span class="ctrl-label">Wind Strength</span><span class="ctrl-val" id="v-w-str">0.80</span></div>
+    <input type="range" id="s-w-str" min="0" max="3" value="0.8" step="0.05">
+  </div>
+  <div class="ctrl">
+    <div class="ctrl-top"><span class="ctrl-label">Turbulence</span><span class="ctrl-val" id="v-w-turb">0.30</span></div>
+    <input type="range" id="s-w-turb" min="0" max="1" value="0.3" step="0.02">
+  </div>
+  <div class="ctrl">
+    <div class="ctrl-top"><span class="ctrl-label">Direction (X phase)</span><span class="ctrl-val" id="v-w-dir">0.125</span></div>
+    <input type="range" id="s-w-dir" min="0" max="1" value="0.125" step="0.005">
+  </div>
+  </div>
+</div>
+
+<div id="interaction-panel" class="collapsed">
+  <button type="button" id="interaction-panel-toggle">INTERACTION ▸</button>
+  <div id="interaction-panel-body">
+  <div class="ctrl">
+    <div class="ctrl-top"><span class="ctrl-label">Brush Size</span><span class="ctrl-val" id="v-i-brush">0.010</span></div>
+    <input type="range" id="s-i-brush" min="0.002" max="0.05" value="0.01" step="0.001">
+  </div>
+  <div class="ctrl">
+    <div class="ctrl-top"><span class="ctrl-label">Brush Strength</span><span class="ctrl-val" id="v-i-str">1.00</span></div>
+    <input type="range" id="s-i-str" min="0" max="3" value="1" step="0.05">
+  </div>
+  <div class="ctrl">
+    <div class="ctrl-top"><span class="ctrl-label">Trail Fade</span><span class="ctrl-val" id="v-i-fade">0.970</span></div>
+    <input type="range" id="s-i-fade" min="0.80" max="0.99" value="0.97" step="0.005">
+  </div>
+  <div class="ctrl">
+    <div class="ctrl-top"><span class="ctrl-label">Displacement X</span><span class="ctrl-val" id="v-i-dx">0.7</span></div>
+    <input type="range" id="s-i-dx" min="0" max="4" value="0.7" step="0.1">
+  </div>
+  <div class="ctrl">
+    <div class="ctrl-top"><span class="ctrl-label">Displacement Z</span><span class="ctrl-val" id="v-i-dz">0.7</span></div>
+    <input type="range" id="s-i-dz" min="0" max="4" value="0.7" step="0.1">
+  </div>
+  </div>
+</div>
+</div>
+
+<button type="button" id="fullscreen-btn" title="Fullscreen">⤢</button>
+<button type="button" id="mute-btn">MUTE</button>
+
+<script type="module">
+import * as THREE from 'three';
+
+const BLADE_COUNT = 150000;
+
+let fieldMinX, fieldMaxX, fieldMinZ, fieldMaxZ;
+
+// ── Scene ─────────────────────────────────────────────────────────────────────
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x040a01, 1);
+document.body.appendChild(renderer.domElement);
+
+// ── Mouse trail (ping-pong render target) ───────────────────────────────────
+const trailRTA = new THREE.WebGLRenderTarget(256, 256);
+const trailRTB = new THREE.WebGLRenderTarget(256, 256);
+let trailRead = trailRTA;
+let trailWrite = trailRTB;
+
+const trailScene = new THREE.Scene();
+const trailCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+const trailVertShader = /* glsl */`
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = vec4(position.xy, 0.0, 1.0);
+}
+`;
+
+const trailFragShader = /* glsl */`
+uniform vec2 uMouse;
+uniform sampler2D uPrevTrail;
+uniform float uFade;
+uniform float uBrushSize;
+uniform float uBrushStrength;
+varying vec2 vUv;
+void main() {
+  vec4 prev = texture2D(uPrevTrail, vUv) * uFade;
+  float dist = length(vUv - uMouse);
+  float brush = smoothstep(uBrushSize, 0.0, dist) * uBrushStrength;
+  gl_FragColor = vec4(prev.rgb + vec3(brush), 1.0);
+}
+`;
+
+const trailMaterial = new THREE.ShaderMaterial({
+  uniforms: {
+    uMouse:         { value: new THREE.Vector2(-10, -10) },
+    uPrevTrail:     { value: trailRead.texture },
+    uFade:          { value: 0.97 },
+    uBrushSize:     { value: 0.01 },
+    uBrushStrength: { value: 1.0 },
+  },
+  vertexShader: trailVertShader,
+  fragmentShader: trailFragShader,
+});
+
+const trailQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), trailMaterial);
+trailScene.add(trailQuad);
+
+// ── Gust state machine ────────────────────────────────────────────────────────
+const gust = {
+  state: 'CALM',
+  calmTimer: 0,
+  strength: 0,
+  targetStrength: 0,
+  frontX: 0,
+  speed: 0,
+  dirX: 1,
+  dirZ: 0,
+  width: 50,
+  buildDuration: 0,
+  fadeDuration: 0,
+  phaseTimer: 0,
+};
+
+function spawnGust() {
+  const angle = (Math.random() - 0.5) * 0.6;
+  gust.dirX = Math.cos(angle) * (Math.random() < 0.8 ? 1 : -1);
+  gust.dirZ = Math.sin(angle);
+  gust.speed = 20 + Math.random() * 35;
+  gust.targetStrength = 0.3 + Math.random() * 0.7;
+  gust.width = 30 + Math.random() * 60;
+  gust.buildDuration = 0.4 + Math.random() * 1.2;
+  gust.fadeDuration = 0.6 + Math.random() * 1.5;
+  gust.frontX = gust.dirX > 0 ? fieldMinX - 20 : fieldMaxX + 20;
+  gust.strength = 0;
+  gust.phaseTimer = 0;
+  gust.state = 'BUILDING';
+}
+
+function updateGust(delta) {
+  gust.phaseTimer += delta;
+
+  if (gust.state === 'CALM') {
+    gust.calmTimer -= delta;
+    gust.strength = 0;
+    if (gust.calmTimer <= 0) spawnGust();
+  } else if (gust.state === 'BUILDING') {
+    const t = Math.min(1, gust.phaseTimer / gust.buildDuration);
+    gust.strength = t * t * gust.targetStrength;
+    gust.frontX += gust.dirX * gust.speed * delta;
+    if (t >= 1) { gust.state = 'ACTIVE'; gust.phaseTimer = 0; }
+  } else if (gust.state === 'ACTIVE') {
+    gust.frontX += gust.dirX * gust.speed * delta;
+    gust.strength = gust.targetStrength * (0.85 + Math.sin(gust.phaseTimer * 3.7) * 0.15);
+    if (Math.abs(gust.frontX - (gust.dirX > 0 ? fieldMaxX : fieldMinX)) > 20) {
+      gust.state = 'FADING';
+      gust.phaseTimer = 0;
+    }
+  } else if (gust.state === 'FADING') {
+    const t = Math.min(1, gust.phaseTimer / gust.fadeDuration);
+    gust.strength = gust.targetStrength * (1 - t * t);
+    gust.frontX += gust.dirX * gust.speed * delta;
+    if (t >= 1) {
+      gust.state = 'CALM';
+      gust.strength = 0;
+      gust.calmTimer = 2 + Math.random() * 6;
+      gust.phaseTimer = 0;
+    }
+  }
+}
+
+gust.state = 'CALM';
+gust.calmTimer = 1 + Math.random() * 2;
+
+const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const raycaster = new THREE.Raycaster();
+const mouseNdc = new THREE.Vector2();
+const hitPoint = new THREE.Vector3();
+const cursorTrailUV = { x: -10, y: -10 };
+let mouseScreenX = 0;
+let mouseScreenY = 0;
+
+// ── ASMR audio (starts on first user interaction) ───────────────────────────
+let audioCtx = null;
+let noise1, noise2, noiseWind, noiseRustle, bandpass, lowpass, windHighpass, whooshFilter, rustleHighpass, rustleFilter, gain1, gain2, gainWhoosh, gainRustle, panner, windPanner;
+let audioReady = false;
+let audioMuted = false;
+let lastMouseX = 0;
+let lastMouseY = 0;
+let smoothVelocity = 0;
+let smoothWindActivity = 0;
+let cursorWorldX = 0;
+let cursorWorldZ = -50;
+const trailPixelBuf = new Uint8Array(8 * 8 * 4);
+
+function initAudio() {
+  if (audioReady) return;
+  audioReady = true;
+
+  audioCtx = new AudioContext();
+
+  noise1 = audioCtx.createScriptProcessor(2048, 0, 1);
+  noise1.onaudioprocess = e => {
+    const out = e.outputBuffer.getChannelData(0);
+    for (let i = 0; i < out.length; i++) out[i] = Math.random() * 2 - 1;
+  };
+  bandpass = audioCtx.createBiquadFilter();
+  bandpass.type = 'bandpass';
+  bandpass.frequency.value = 2800;
+  bandpass.Q.value = 1.2;
+  gain1 = audioCtx.createGain();
+  gain1.gain.value = 0;
+  noise1.connect(bandpass);
+  bandpass.connect(gain1);
+
+  noise2 = audioCtx.createScriptProcessor(2048, 0, 1);
+  noise2.onaudioprocess = e => {
+    const out = e.outputBuffer.getChannelData(0);
+    for (let i = 0; i < out.length; i++) out[i] = Math.random() * 2 - 1;
+  };
+  lowpass = audioCtx.createBiquadFilter();
+  lowpass.type = 'lowpass';
+  lowpass.frequency.value = 400;
+  gain2 = audioCtx.createGain();
+  gain2.gain.value = 0;
+  noise2.connect(lowpass);
+  lowpass.connect(gain2);
+
+  panner = audioCtx.createStereoPanner();
+  panner.pan.value = 0;
+  gain1.connect(panner);
+  gain2.connect(panner);
+  panner.connect(audioCtx.destination);
+
+  windPanner = audioCtx.createStereoPanner();
+  windPanner.pan.value = 0;
+  windPanner.connect(audioCtx.destination);
+
+  noiseWind = audioCtx.createScriptProcessor(2048, 0, 1);
+  noiseWind.onaudioprocess = e => {
+    const out = e.outputBuffer.getChannelData(0);
+    for (let i = 0; i < out.length; i++) out[i] = Math.random() * 2 - 1;
+  };
+  windHighpass = audioCtx.createBiquadFilter();
+  windHighpass.type = 'highpass';
+  windHighpass.frequency.value = 180;
+  whooshFilter = audioCtx.createBiquadFilter();
+  whooshFilter.type = 'bandpass';
+  whooshFilter.frequency.value = 425;
+  whooshFilter.Q.value = 0.5;
+  gainWhoosh = audioCtx.createGain();
+  gainWhoosh.gain.value = 0;
+  noiseWind.connect(windHighpass);
+  windHighpass.connect(whooshFilter);
+  whooshFilter.connect(gainWhoosh);
+  gainWhoosh.connect(windPanner);
+
+  noiseRustle = audioCtx.createScriptProcessor(2048, 0, 1);
+  noiseRustle.onaudioprocess = e => {
+    const out = e.outputBuffer.getChannelData(0);
+    for (let i = 0; i < out.length; i++) out[i] = Math.random() * 2 - 1;
+  };
+  rustleHighpass = audioCtx.createBiquadFilter();
+  rustleHighpass.type = 'highpass';
+  rustleHighpass.frequency.value = 1800;
+  rustleFilter = audioCtx.createBiquadFilter();
+  rustleFilter.type = 'bandpass';
+  rustleFilter.frequency.value = 2500;
+  rustleFilter.Q.value = 2.5;
+  gainRustle = audioCtx.createGain();
+  gainRustle.gain.value = 0;
+  noiseRustle.connect(rustleHighpass);
+  rustleHighpass.connect(rustleFilter);
+  rustleFilter.connect(gainRustle);
+  gainRustle.connect(windPanner);
+
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function tryInitAudio() {
+  initAudio();
+}
+
+function updateMouseFromEvent(clientX, clientY) {
+  tryInitAudio();
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouseScreenX = clientX;
+  mouseScreenY = clientY;
+  mouseNdc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+  mouseNdc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(mouseNdc, camera);
+  if (raycaster.ray.intersectPlane(groundPlane, hitPoint)) {
+    cursorWorldX = hitPoint.x;
+    cursorWorldZ = hitPoint.z;
+    cursorTrailUV.x = (hitPoint.x - fieldMinX) / (fieldMaxX - fieldMinX);
+    cursorTrailUV.y = (hitPoint.z - fieldMinZ) / (fieldMaxZ - fieldMinZ);
+    trailMaterial.uniforms.uMouse.value.set(cursorTrailUV.x, cursorTrailUV.y);
+  }
+}
+
+function updateAudioFromTrail() {
+  if (!audioReady) return;
+
+  let trailIntensity = 0;
+  const onGrass =
+    cursorTrailUV.x >= 0 && cursorTrailUV.x <= 1 &&
+    cursorTrailUV.y >= 0 && cursorTrailUV.y <= 1;
+
+  if (onGrass) {
+    const px = Math.floor(cursorTrailUV.x * 256);
+    const py = Math.floor(cursorTrailUV.y * 256);
+    const x = Math.max(0, Math.min(248, px - 4));
+    const y = Math.max(0, Math.min(248, py - 4));
+    renderer.readRenderTargetPixels(trailRead, x, y, 8, 8, trailPixelBuf);
+    let sum = 0;
+    for (let i = 0; i < trailPixelBuf.length; i += 4) sum += trailPixelBuf[i] / 255;
+    trailIntensity = Math.min(1, sum / 64);
+  }
+
+  const dx = mouseScreenX - lastMouseX;
+  const dy = mouseScreenY - lastMouseY;
+  const velocity = Math.sqrt(dx * dx + dy * dy);
+  lastMouseX = mouseScreenX;
+  lastMouseY = mouseScreenY;
+
+  smoothVelocity = smoothVelocity * 0.75 + velocity * 0.25;
+
+  const cursorActivity = Math.min(1, smoothVelocity * 0.04) * trailIntensity;
+
+  const g1 = cursorActivity * 0.40;
+  const g2 = cursorActivity * 0.18;
+  gain1.gain.value = audioMuted ? 0 : g1;
+  gain2.gain.value = audioMuted ? 0 : g2;
+  bandpass.frequency.value = 2000 + cursorActivity * 2500;
+  panner.pan.value = (mouseScreenX / window.innerWidth) * 2 - 1;
+
+  const gustAudioStrength = gust.strength;
+
+  if (gustAudioStrength > smoothWindActivity) {
+    smoothWindActivity = smoothWindActivity * 0.5 + gustAudioStrength * 0.5;
+  } else {
+    smoothWindActivity = smoothWindActivity * 0.96 + gustAudioStrength * 0.04;
+  }
+
+  const fieldCenterX = (fieldMinX + fieldMaxX) / 2;
+  const fieldHalfWidth = (fieldMaxX - fieldMinX) / 2;
+  const gustPan = Math.max(-1, Math.min(1, (gust.frontX - fieldCenterX) / fieldHalfWidth));
+  if (windPanner) windPanner.pan.value = gustPan;
+
+  gainWhoosh.gain.value = audioMuted ? 0 : smoothWindActivity * 0.009;
+  whooshFilter.frequency.value = 300 + smoothWindActivity * 250;
+  whooshFilter.Q.value = 0.5;
+  gainRustle.gain.value = audioMuted ? 0 : smoothWindActivity * 0.038;
+  rustleFilter.frequency.value = 2400 + smoothWindActivity * 1600;
+  rustleFilter.Q.value = 2.5 + smoothWindActivity * 1.5;
+}
+
+renderer.domElement.addEventListener('mousemove', e => {
+  updateMouseFromEvent(e.clientX, e.clientY);
+});
+renderer.domElement.addEventListener('click', () => tryInitAudio());
+renderer.domElement.addEventListener('mouseleave', () => {
+  trailMaterial.uniforms.uMouse.value.set(-10, -10);
+  cursorTrailUV.x = -10;
+  cursorTrailUV.y = -10;
+  cursorWorldX = 0;
+  cursorWorldZ = -50;
+});
+
+function updateTrail() {
+  trailMaterial.uniforms.uPrevTrail.value = trailRead.texture;
+  renderer.setRenderTarget(trailWrite);
+  renderer.render(trailScene, trailCamera);
+  renderer.setRenderTarget(null);
+  const tmp = trailRead;
+  trailRead = trailWrite;
+  trailWrite = tmp;
+  grassMaterial.uniforms.uTrail.value = trailRead.texture;
+}
+
+const scene = new THREE.Scene();
+
+const CAM_INTRO_START_Y = 34.0;
+const CAM_INTRO_START_Z = 13.5;
+const CAM_INTRO_END_Y = 18;
+const CAM_INTRO_END_Z = 4;
+const CAM_LOOK_Y = 1.0;
+const CAM_LOOK_Z = -29;
+const CAM_INTRO_START_FOV = 43;
+const CAM_INTRO_END_FOV = 35;
+
+const camera = new THREE.PerspectiveCamera(
+  CAM_INTRO_START_FOV,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  200
+);
+camera.position.set(0, CAM_INTRO_START_Y, CAM_INTRO_START_Z);
+camera.lookAt(0, CAM_LOOK_Y, CAM_LOOK_Z);
+
+// Visible ground bounds at final camera pose (+ 25% margin)
+camera.position.set(0, CAM_INTRO_END_Y, CAM_INTRO_END_Z);
+camera.fov = CAM_INTRO_END_FOV;
+camera.lookAt(0, CAM_LOOK_Y, CAM_LOOK_Z);
+camera.updateProjectionMatrix();
+camera.updateMatrixWorld(true);
+
+const frustumCorners = [-1, 1].flatMap(x => [-1, 1].map(y => {
+  const vec = new THREE.Vector3(x, y, 0.5).unproject(camera);
+  const dir = vec.sub(camera.position).normalize();
+  const t = -camera.position.y / dir.y;
+  return camera.position.clone().add(dir.multiplyScalar(t));
+}));
+
+const xs = frustumCorners.map(v => v.x);
+const zs = frustumCorners.map(v => v.z);
+const visibleMinX = Math.min(...xs);
+const visibleMaxX = Math.max(...xs);
+const visibleMinZ = Math.min(...zs);
+const visibleMaxZ = Math.max(...zs);
+
+const marginX = (visibleMaxX - visibleMinX) * 0.25;
+const marginZ = (visibleMaxZ - visibleMinZ) * 0.25;
+fieldMinX = visibleMinX - marginX;
+fieldMaxX = visibleMaxX + marginX;
+fieldMinZ = visibleMinZ - marginZ;
+fieldMaxZ = visibleMaxZ + marginZ;
+
+console.log('Field bounds:', fieldMinX, fieldMaxX, fieldMinZ, fieldMaxZ);
+
+camera.position.set(0, CAM_INTRO_START_Y, CAM_INTRO_START_Z);
+camera.fov = CAM_INTRO_START_FOV;
+camera.lookAt(0, CAM_LOOK_Y, CAM_LOOK_Z);
+camera.updateProjectionMatrix();
+
+// ── Blade geometry (shared, base at Y = 0) ──────────────────────────────────
+const bladeGeometry = new THREE.PlaneGeometry(1, 1, 1, 6);
+bladeGeometry.translate(0, 0.5, 0);
+
+// ── Instanced attributes ────────────────────────────────────────────────────
+const aHeight = new Float32Array(BLADE_COUNT);
+const aWidth  = new Float32Array(BLADE_COUNT);
+const aLean   = new Float32Array(BLADE_COUNT);
+const aRandom = new Float32Array(BLADE_COUNT);
+
+bladeGeometry.setAttribute('aHeight', new THREE.InstancedBufferAttribute(aHeight, 1));
+bladeGeometry.setAttribute('aWidth',  new THREE.InstancedBufferAttribute(aWidth, 1));
+bladeGeometry.setAttribute('aLean',   new THREE.InstancedBufferAttribute(aLean, 1));
+bladeGeometry.setAttribute('aRandom', new THREE.InstancedBufferAttribute(aRandom, 1));
+
+// ── Shaders ─────────────────────────────────────────────────────────────────
+const vertexShader = /* glsl */`
+uniform float uGustFrontX;
+uniform float uGustStrength;
+uniform float uGustWidth;
+uniform float uGustDirX;
+uniform float uGustDirZ;
+uniform sampler2D uTrail;
+uniform float uTrailStrengthX;
+uniform float uTrailStrengthZ;
+uniform float uFieldMinX;
+uniform float uFieldMaxX;
+uniform float uFieldMinZ;
+uniform float uFieldMaxZ;
+
+attribute float aHeight;
+attribute float aWidth;
+attribute float aLean;
+attribute float aRandom;
+
+varying vec2 vUv;
+varying float vRandom;
+varying vec2 vWorldNormal;
+
+void main() {
+  vUv = uv;
+  vRandom = aRandom;
+  vWorldNormal = vec2(cos(aLean), sin(aLean));
+
+  vec3 pos = position;
+  pos.x *= aWidth;
+  pos.y *= aHeight;
+
+  pos.x += sin(aLean * uv.y * 0.4) * aHeight * 0.25;
+  pos.x += sin(aLean * pow(uv.y, 0.7)) * aHeight * 0.65;
+
+  vec3 transformed = pos;
+
+  float instanceX = instanceMatrix[3][0];
+  float instanceZ = instanceMatrix[3][2];
+
+  float windStrength = pow(uv.y, 2.0);
+
+  vec2 fieldUV = vec2(
+    (instanceX - uFieldMinX) / (uFieldMaxX - uFieldMinX),
+    (instanceZ - uFieldMinZ) / (uFieldMaxZ - uFieldMinZ)
+  );
+  float trail = texture2D(uTrail, fieldUV).r;
+
+  transformed.x += trail * uTrailStrengthX * windStrength;
+  transformed.z += trail * uTrailStrengthZ * windStrength;
+
+  float projectedPos = instanceX * uGustDirX + instanceZ * uGustDirZ;
+  float distFromFront = projectedPos - uGustFrontX;
+
+  float inGust = smoothstep(-uGustWidth, 0.0, distFromFront)
+               * smoothstep(uGustWidth * 0.4, 0.0, distFromFront + uGustWidth);
+
+  float displacement = inGust * uGustStrength * windStrength * aHeight * 1.8;
+
+  vec4 worldPos = instanceMatrix * vec4(transformed, 1.0);
+  worldPos.x += displacement * uGustDirX;
+  worldPos.z += displacement * uGustDirZ * 0.3;
+  gl_Position = projectionMatrix * modelViewMatrix * worldPos;
+}
+`;
+
+const fragmentShader = /* glsl */`
+varying vec2 vUv;
+varying float vRandom;
+varying vec2 vWorldNormal;
+
+void main() {
+  float randVar = (vRandom - 0.5) * 2.0 * (10.0 / 255.0);
+
+  vec3 baseColor = vec3(28.0 / 255.0, 58.0 / 255.0, 18.0 / 255.0) + vec3(randVar);
+  vec3 midColor  = vec3(52.0 / 255.0, 105.0 / 255.0, 32.0 / 255.0);
+  vec3 tipPale   = vec3(195.0 / 255.0, 215.0 / 255.0, 155.0 / 255.0);
+  vec3 tipBright = vec3(225.0 / 255.0, 232.0 / 255.0, 190.0 / 255.0);
+  vec3 tipColor  = mix(tipPale, tipBright, smoothstep(0.70, 1.0, vUv.y));
+
+  vec3 col = baseColor;
+  col = mix(col, midColor, smoothstep(0.35, 0.50, vUv.y));
+  col = mix(col, tipColor, smoothstep(0.70, 0.85, vUv.y));
+
+  float ao = smoothstep(0.0, 0.25, vUv.y);
+  col *= (0.25 + 0.75 * ao);
+
+  float sunDot = dot(normalize(vWorldNormal), normalize(vec2(0.8, 0.6)));
+  float light = 0.6 + 0.4 * sunDot;
+  col *= light;
+
+  float specular = pow(max(0.0, vUv.y - 0.85) / 0.15, 2.0) * 0.4;
+  col += vec3(specular * 0.9, specular, specular * 0.7);
+
+  gl_FragColor = vec4(col, 1.0);
+}
+`;
+
+const grassMaterial = new THREE.ShaderMaterial({
+  vertexShader,
+  fragmentShader,
+  side: THREE.DoubleSide,
+  uniforms: {
+    projectionMatrix: { value: camera.projectionMatrix },
+    modelViewMatrix:  { value: new THREE.Matrix4() },
+    uGustFrontX:      { value: 0 },
+    uGustStrength:    { value: 0 },
+    uGustWidth:       { value: 50 },
+    uGustDirX:        { value: 1 },
+    uGustDirZ:        { value: 0 },
+    uWindSpeed:       { value: 0.75 },
+    uWindStrength:    { value: 0.8 },
+    uTurbulence:      { value: 0.3 },
+    uWindDir:         { value: 0.125 },
+    uTrail:           { value: trailRead.texture },
+    uTrailStrengthX:  { value: 0.7 },
+    uTrailStrengthZ:  { value: 0.7 },
+    uFieldMinX:       { value: 0 },
+    uFieldMaxX:       { value: 0 },
+    uFieldMinZ:       { value: 0 },
+    uFieldMaxZ:       { value: 0 },
+  },
+});
+
+grassMaterial.uniforms.uFieldMinX.value = fieldMinX;
+grassMaterial.uniforms.uFieldMaxX.value = fieldMaxX;
+grassMaterial.uniforms.uFieldMinZ.value = fieldMinZ;
+grassMaterial.uniforms.uFieldMaxZ.value = fieldMaxZ;
+
+const grass = new THREE.InstancedMesh(bladeGeometry, grassMaterial, BLADE_COUNT);
+const dummy = new THREE.Object3D();
+
+let i = 0;
+while (i < BLADE_COUNT) {
+  aHeight[i] = 0.4 + Math.random() * 0.8;
+  aWidth[i]  = 0.018 + Math.random() * 0.017;
+  aLean[i]   = -0.15 + Math.random() * 0.4;
+  aRandom[i] = Math.random();
+
+  const x = fieldMinX + Math.random() * (fieldMaxX - fieldMinX);
+  const z = fieldMinZ + Math.random() * (fieldMaxZ - fieldMinZ);
+
+  dummy.position.set(x, 0, z);
+  dummy.rotation.set(0, 0, 0);
+  dummy.updateMatrix();
+  grass.setMatrixAt(i, dummy.matrix);
+  i++;
+}
+grass.instanceMatrix.needsUpdate = true;
+
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(fieldMaxX - fieldMinX, fieldMaxZ - fieldMinZ),
+  new THREE.MeshBasicMaterial({ color: 0x0a1503 })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.position.set((fieldMinX + fieldMaxX) / 2, 0, (fieldMinZ + fieldMaxZ) / 2);
+scene.add(ground);
+
+scene.add(grass);
+
+// ── Resize ──────────────────────────────────────────────────────────────────
+function onResize() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  renderer.setSize(w, h);
+}
+window.addEventListener('resize', onResize);
+
+function bindWind(sliderId, valId, fmt, uniformKey) {
+  const sl = document.getElementById(sliderId);
+  const vl = document.getElementById(valId);
+  sl.addEventListener('input', () => {
+    const v = parseFloat(sl.value);
+    vl.textContent = fmt(v);
+    grassMaterial.uniforms[uniformKey].value = v;
+  });
+  vl.textContent = fmt(parseFloat(sl.value));
+  grassMaterial.uniforms[uniformKey].value = parseFloat(sl.value);
+}
+
+bindWind('s-w-spd', 'v-w-spd', v => v.toFixed(2), 'uWindSpeed');
+bindWind('s-w-str', 'v-w-str', v => v.toFixed(2), 'uWindStrength');
+bindWind('s-w-turb', 'v-w-turb', v => v.toFixed(2), 'uTurbulence');
+bindWind('s-w-dir', 'v-w-dir', v => v.toFixed(3), 'uWindDir');
+
+const windPanel = document.getElementById('wind-panel');
+const windPanelToggle = document.getElementById('wind-panel-toggle');
+windPanelToggle.addEventListener('click', () => {
+  const collapsed = windPanel.classList.toggle('collapsed');
+  windPanelToggle.textContent = collapsed ? 'WIND ▸' : 'WIND ▾';
+});
+
+function bindUniform(material, sliderId, valId, uniformKey, fmt) {
+  const sl = document.getElementById(sliderId);
+  const vl = document.getElementById(valId);
+  sl.addEventListener('input', () => {
+    const v = parseFloat(sl.value);
+    vl.textContent = fmt(v);
+    material.uniforms[uniformKey].value = v;
+  });
+  vl.textContent = fmt(parseFloat(sl.value));
+  material.uniforms[uniformKey].value = parseFloat(sl.value);
+}
+
+bindUniform(trailMaterial, 's-i-brush', 'v-i-brush', 'uBrushSize', v => v.toFixed(3));
+bindUniform(trailMaterial, 's-i-str', 'v-i-str', 'uBrushStrength', v => v.toFixed(2));
+bindUniform(trailMaterial, 's-i-fade', 'v-i-fade', 'uFade', v => v.toFixed(3));
+bindUniform(grassMaterial, 's-i-dx', 'v-i-dx', 'uTrailStrengthX', v => v.toFixed(1));
+bindUniform(grassMaterial, 's-i-dz', 'v-i-dz', 'uTrailStrengthZ', v => v.toFixed(1));
+
+const interactionPanel = document.getElementById('interaction-panel');
+const interactionPanelToggle = document.getElementById('interaction-panel-toggle');
+interactionPanelToggle.addEventListener('click', () => {
+  const collapsed = interactionPanel.classList.toggle('collapsed');
+  interactionPanelToggle.textContent = collapsed ? 'INTERACTION ▸' : 'INTERACTION ▾';
+});
+
+const fullscreenBtn = document.getElementById('fullscreen-btn');
+fullscreenBtn.addEventListener('click', () => {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen();
+  } else {
+    document.exitFullscreen();
+  }
+});
+document.addEventListener('fullscreenchange', () => {
+  fullscreenBtn.textContent = document.fullscreenElement ? '⛶' : '⤢';
+});
+
+const muteBtn = document.getElementById('mute-btn');
+muteBtn.addEventListener('click', () => {
+  tryInitAudio();
+  audioMuted = !audioMuted;
+  muteBtn.textContent = audioMuted ? 'UNMUTE' : 'MUTE';
+  if (audioReady) {
+    gain1.gain.value = 0;
+    gain2.gain.value = 0;
+    gainWhoosh.gain.value = 0;
+    gainRustle.gain.value = 0;
+  }
+});
+
+const clock = new THREE.Clock();
+const INTRO_DURATION = 2.0;
+let introStartTime = null;
+
+camera.updateProjectionMatrix();
+
+// ── Render loop ─────────────────────────────────────────────────────────────
+function animate() {
+  requestAnimationFrame(animate);
+
+  if (introStartTime === null) introStartTime = clock.getElapsedTime();
+  const introElapsed = clock.getElapsedTime() - introStartTime;
+  if (introElapsed < INTRO_DURATION) {
+    const t = introElapsed / INTRO_DURATION;
+    const ease = 1 - Math.pow(1 - t, 3);
+    camera.position.y = CAM_INTRO_START_Y + (CAM_INTRO_END_Y - CAM_INTRO_START_Y) * ease;
+    camera.position.z = CAM_INTRO_START_Z + (CAM_INTRO_END_Z - CAM_INTRO_START_Z) * ease;
+    camera.fov = CAM_INTRO_START_FOV + (CAM_INTRO_END_FOV - CAM_INTRO_START_FOV) * ease;
+    camera.lookAt(0, CAM_LOOK_Y, CAM_LOOK_Z);
+    camera.updateProjectionMatrix();
+  }
+
+  const delta = clock.getDelta();
+  updateGust(delta);
+  grassMaterial.uniforms.uGustFrontX.value = gust.frontX;
+  grassMaterial.uniforms.uGustStrength.value = gust.strength;
+  grassMaterial.uniforms.uGustWidth.value = gust.width;
+  grassMaterial.uniforms.uGustDirX.value = gust.dirX;
+  grassMaterial.uniforms.uGustDirZ.value = gust.dirZ;
+  updateTrail();
+  updateAudioFromTrail();
+  grass.updateMatrixWorld();
+  grass.material.uniforms.projectionMatrix.value.copy(camera.projectionMatrix);
+  grass.material.uniforms.modelViewMatrix.value.multiplyMatrices(
+    camera.matrixWorldInverse,
+    grass.matrixWorld
+  );
+  renderer.render(scene, camera);
+}
+
+animate();
+
+console.log(`Touch Grass WebGL — ${BLADE_COUNT} instanced blades`);
+</script>
+</body>
+</html>
