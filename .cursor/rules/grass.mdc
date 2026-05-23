@@ -7,7 +7,7 @@ alwaysApply: false
 # Grass simulation — Cursor rules
 
 ## Project
-Single-file Canvas 2D prototype (`touch_grass.html`). Goal: realistic barley-like tall grass reacting to cursor. Full context in `context.md`.
+Barley-like tall grass reacting to cursor. **Active build:** `touch_grass_webgl.html` (Three.js instanced blades, gust bands, directional trail, audio). **Reference:** `touch_grass.html` (Canvas 2D physics/awns). Full context in `context.md`.
 
 ## Behaviour rules
 - Read the relevant function before touching it. Never rewrite working code to fix an adjacent issue.

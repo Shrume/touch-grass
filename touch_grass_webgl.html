@@ -165,24 +165,24 @@ canvas { display: block; width: 100%; height: 100%; }
   <button type="button" id="interaction-panel-toggle">INTERACTION ▸</button>
   <div id="interaction-panel-body">
   <div class="ctrl">
-    <div class="ctrl-top"><span class="ctrl-label">Brush Size</span><span class="ctrl-val" id="v-i-brush">0.010</span></div>
-    <input type="range" id="s-i-brush" min="0.002" max="0.05" value="0.01" step="0.001">
+    <div class="ctrl-top"><span class="ctrl-label">Brush Size</span><span class="ctrl-val" id="v-i-brush">0.022</span></div>
+    <input type="range" id="s-i-brush" min="0.002" max="0.05" value="0.022" step="0.001">
   </div>
   <div class="ctrl">
-    <div class="ctrl-top"><span class="ctrl-label">Brush Strength</span><span class="ctrl-val" id="v-i-str">1.00</span></div>
-    <input type="range" id="s-i-str" min="0" max="3" value="1" step="0.05">
+    <div class="ctrl-top"><span class="ctrl-label">Brush Strength</span><span class="ctrl-val" id="v-i-str">0.85</span></div>
+    <input type="range" id="s-i-str" min="0" max="3" value="0.85" step="0.05">
   </div>
   <div class="ctrl">
-    <div class="ctrl-top"><span class="ctrl-label">Trail Fade</span><span class="ctrl-val" id="v-i-fade">0.970</span></div>
-    <input type="range" id="s-i-fade" min="0.80" max="0.99" value="0.97" step="0.005">
+    <div class="ctrl-top"><span class="ctrl-label">Trail Fade</span><span class="ctrl-val" id="v-i-fade">0.996</span></div>
+    <input type="range" id="s-i-fade" min="0.95" max="0.998" value="0.996" step="0.005">
   </div>
   <div class="ctrl">
-    <div class="ctrl-top"><span class="ctrl-label">Displacement X</span><span class="ctrl-val" id="v-i-dx">0.7</span></div>
-    <input type="range" id="s-i-dx" min="0" max="4" value="0.7" step="0.1">
+    <div class="ctrl-top"><span class="ctrl-label">Displacement X</span><span class="ctrl-val" id="v-i-dx">0.8</span></div>
+    <input type="range" id="s-i-dx" min="0" max="4" value="0.8" step="0.1">
   </div>
   <div class="ctrl">
-    <div class="ctrl-top"><span class="ctrl-label">Displacement Z</span><span class="ctrl-val" id="v-i-dz">0.7</span></div>
-    <input type="range" id="s-i-dz" min="0" max="4" value="0.7" step="0.1">
+    <div class="ctrl-top"><span class="ctrl-label">Displacement Z</span><span class="ctrl-val" id="v-i-dz">0.8</span></div>
+    <input type="range" id="s-i-dz" min="0" max="4" value="0.8" step="0.1">
   </div>
   </div>
 </div>
@@ -224,26 +224,46 @@ void main() {
 
 const trailFragShader = /* glsl */`
 uniform vec2 uMouse;
+uniform vec2 uCursorDir;
+uniform float uCursorSpeed;
 uniform sampler2D uPrevTrail;
 uniform float uFade;
 uniform float uBrushSize;
 uniform float uBrushStrength;
 varying vec2 vUv;
 void main() {
-  vec4 prev = texture2D(uPrevTrail, vUv) * uFade;
+  vec4 prev = texture2D(uPrevTrail, vUv);
+  prev.b *= uFade;
+  prev.rg = mix(vec2(0.5), prev.rg, prev.b);
+  if (prev.b < 0.012) prev = vec4(0.5, 0.5, 0.0, 1.0);
+
   float dist = length(vUv - uMouse);
-  float brush = smoothstep(uBrushSize, 0.0, dist) * uBrushStrength;
-  gl_FragColor = vec4(prev.rgb + vec3(brush), 1.0);
+  float speedScale = uCursorSpeed;
+  float brush = smoothstep(uBrushSize, 0.0, dist) * uBrushStrength * (0.4 + speedScale * 0.6);
+
+  vec2 encodedDir = uCursorDir * 0.5 + 0.5;
+
+  vec3 newColor = prev.rgb;
+  if (brush > 0.0) {
+    newColor.r = mix(prev.r, encodedDir.x, brush * 0.8);
+    newColor.g = mix(prev.g, encodedDir.y, brush * 0.8);
+    newColor.b = min(1.0, prev.b + brush);
+  } else {
+    newColor.b = prev.b;
+  }
+  gl_FragColor = vec4(newColor, 1.0);
 }
 `;
 
 const trailMaterial = new THREE.ShaderMaterial({
   uniforms: {
     uMouse:         { value: new THREE.Vector2(-10, -10) },
+    uCursorDir:     { value: new THREE.Vector2(0, 0) },
+    uCursorSpeed:   { value: 0 },
     uPrevTrail:     { value: trailRead.texture },
-    uFade:          { value: 0.97 },
-    uBrushSize:     { value: 0.01 },
-    uBrushStrength: { value: 1.0 },
+    uFade:          { value: 0.996 },
+    uBrushSize:     { value: 0.022 },
+    uBrushStrength: { value: 0.85 },
   },
   vertexShader: trailVertShader,
   fragmentShader: trailFragShader,
@@ -253,6 +273,20 @@ const trailQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), trailMaterial);
 trailScene.add(trailQuad);
 
 // ── Gust state machine ────────────────────────────────────────────────────────
+let gustFadeStart = 0;
+let springPos = 0;
+let springVel = 0;
+let currentDirX = 1;
+let currentDirZ = 0;
+let currentWidth = 200;
+let gustBlend = 0.0;
+const SPRING_STIFFNESS = 1.8;
+const SPRING_DAMPING = 0.9;
+let trailSpring = 0;
+let trailSpringVel = 0;
+const TRAIL_STIFFNESS = 3.0;
+const TRAIL_DAMPING = 0.8;
+console.log('Springs:', SPRING_STIFFNESS, SPRING_DAMPING, TRAIL_STIFFNESS, TRAIL_DAMPING);
 const gust = {
   state: 'CALM',
   calmTimer: 0,
@@ -272,11 +306,11 @@ function spawnGust() {
   const angle = (Math.random() - 0.5) * 0.6;
   gust.dirX = Math.cos(angle) * (Math.random() < 0.8 ? 1 : -1);
   gust.dirZ = Math.sin(angle);
-  gust.speed = 20 + Math.random() * 35;
+  gust.speed = 6 + Math.random() * 12;
   gust.targetStrength = 0.3 + Math.random() * 0.7;
-  gust.width = 30 + Math.random() * 60;
-  gust.buildDuration = 0.4 + Math.random() * 1.2;
-  gust.fadeDuration = 0.6 + Math.random() * 1.5;
+  gust.width = 180 + Math.random() * 220;
+  gust.buildDuration = 1.5 + Math.random() * 2.5;
+  gust.fadeDuration = 2.0 + Math.random() * 3.0;
   gust.frontX = gust.dirX > 0 ? fieldMinX - 20 : fieldMaxX + 20;
   gust.strength = 0;
   gust.phaseTimer = 0;
@@ -289,7 +323,8 @@ function updateGust(delta) {
   if (gust.state === 'CALM') {
     gust.calmTimer -= delta;
     gust.strength = 0;
-    if (gust.calmTimer <= 0) spawnGust();
+    const springSettled = Math.abs(springPos) < 0.03 && Math.abs(springVel) < 0.05;
+    if (gust.calmTimer <= 0 && (springSettled || gust.phaseTimer > 8.0)) spawnGust();
   } else if (gust.state === 'BUILDING') {
     const t = Math.min(1, gust.phaseTimer / gust.buildDuration);
     gust.strength = t * t * gust.targetStrength;
@@ -297,26 +332,26 @@ function updateGust(delta) {
     if (t >= 1) { gust.state = 'ACTIVE'; gust.phaseTimer = 0; }
   } else if (gust.state === 'ACTIVE') {
     gust.frontX += gust.dirX * gust.speed * delta;
-    gust.strength = gust.targetStrength * (0.85 + Math.sin(gust.phaseTimer * 3.7) * 0.15);
-    if (Math.abs(gust.frontX - (gust.dirX > 0 ? fieldMaxX : fieldMinX)) > 20) {
+    gust.strength = gust.targetStrength;
+    if (gust.dirX > 0 ? gust.frontX > fieldMaxX + 20 : gust.frontX < fieldMinX - 20) {
       gust.state = 'FADING';
+      gustFadeStart = gust.strength;
       gust.phaseTimer = 0;
     }
   } else if (gust.state === 'FADING') {
-    const t = Math.min(1, gust.phaseTimer / gust.fadeDuration);
-    gust.strength = gust.targetStrength * (1 - t * t);
+    // Step to 0 immediately — spring handles the visual recovery with overshoot
+    gust.strength = 0;
     gust.frontX += gust.dirX * gust.speed * delta;
-    if (t >= 1) {
+    if (gust.phaseTimer >= 0.05) {
       gust.state = 'CALM';
-      gust.strength = 0;
-      gust.calmTimer = 2 + Math.random() * 6;
+      gust.calmTimer = 0.5 + Math.random() * 2.5;
       gust.phaseTimer = 0;
     }
   }
 }
 
 gust.state = 'CALM';
-gust.calmTimer = 1 + Math.random() * 2;
+gust.calmTimer = 0.5 + Math.random() * 1.0;
 
 const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 const raycaster = new THREE.Raycaster();
@@ -337,6 +372,11 @@ let smoothVelocity = 0;
 let smoothWindActivity = 0;
 let cursorWorldX = 0;
 let cursorWorldZ = -50;
+let prevCursorWorldX = 0;
+let prevCursorWorldZ = -50;
+let smoothDirX = 0;
+let smoothDirZ = 0;
+let smoothSpeed = 0;
 const trailPixelBuf = new Uint8Array(8 * 8 * 4);
 
 function initAudio() {
@@ -427,6 +467,30 @@ function tryInitAudio() {
   initAudio();
 }
 
+function updateCursorDirection() {
+  const onGrass =
+    cursorTrailUV.x >= 0 && cursorTrailUV.x <= 1 &&
+    cursorTrailUV.y >= 0 && cursorTrailUV.y <= 1;
+
+  if (onGrass) {
+    const dxRaw = cursorWorldX - prevCursorWorldX;
+    const dzRaw = cursorWorldZ - prevCursorWorldZ;
+    const rawSpeed = Math.sqrt(dxRaw * dxRaw + dzRaw * dzRaw);
+    smoothSpeed = smoothSpeed * 0.65 + rawSpeed * 0.35;
+    if (rawSpeed > 0.01) {
+      smoothDirX = smoothDirX * 0.6 + (dxRaw / rawSpeed) * 0.4;
+      smoothDirZ = smoothDirZ * 0.6 + (dzRaw / rawSpeed) * 0.4;
+    }
+    prevCursorWorldX = cursorWorldX;
+    prevCursorWorldZ = cursorWorldZ;
+  }
+
+  const cursorSpeed = Math.min(1.0, smoothSpeed * 0.8);
+  trailMaterial.uniforms.uCursorDir.value.set(smoothDirX, smoothDirZ);
+  trailMaterial.uniforms.uCursorSpeed.value = cursorSpeed;
+  grassMaterial.uniforms.uCursorSpeed.value = cursorSpeed;
+}
+
 function updateMouseFromEvent(clientX, clientY) {
   tryInitAudio();
   const rect = renderer.domElement.getBoundingClientRect();
@@ -459,7 +523,7 @@ function updateAudioFromTrail() {
     const y = Math.max(0, Math.min(248, py - 4));
     renderer.readRenderTargetPixels(trailRead, x, y, 8, 8, trailPixelBuf);
     let sum = 0;
-    for (let i = 0; i < trailPixelBuf.length; i += 4) sum += trailPixelBuf[i] / 255;
+    for (let i = 0; i < trailPixelBuf.length; i += 4) sum += trailPixelBuf[i + 2] / 255;
     trailIntensity = Math.min(1, sum / 64);
   }
 
@@ -511,6 +575,8 @@ renderer.domElement.addEventListener('mouseleave', () => {
   cursorTrailUV.y = -10;
   cursorWorldX = 0;
   cursorWorldZ = -50;
+  prevCursorWorldX = 0;
+  prevCursorWorldZ = -50;
 });
 
 function updateTrail() {
@@ -596,14 +662,21 @@ bladeGeometry.setAttribute('aRandom', new THREE.InstancedBufferAttribute(aRandom
 
 // ── Shaders ─────────────────────────────────────────────────────────────────
 const vertexShader = /* glsl */`
+uniform float uTime;
 uniform float uGustFrontX;
 uniform float uGustStrength;
 uniform float uGustWidth;
+uniform float uGustBlend;
 uniform float uGustDirX;
 uniform float uGustDirZ;
+uniform float uAmbientStrength;
+uniform float uAmbientDirX;
+uniform float uAmbientDirZ;
 uniform sampler2D uTrail;
+uniform float uCursorSpeed;
 uniform float uTrailStrengthX;
 uniform float uTrailStrengthZ;
+uniform float uTrailSpring;
 uniform float uFieldMinX;
 uniform float uFieldMaxX;
 uniform float uFieldMinZ;
@@ -617,6 +690,8 @@ attribute float aRandom;
 varying vec2 vUv;
 varying float vRandom;
 varying vec2 vWorldNormal;
+varying float vCursorBend;
+varying float vWorldZ;
 
 void main() {
   vUv = uv;
@@ -641,43 +716,108 @@ void main() {
     (instanceX - uFieldMinX) / (uFieldMaxX - uFieldMinX),
     (instanceZ - uFieldMinZ) / (uFieldMaxZ - uFieldMinZ)
   );
-  float trail = texture2D(uTrail, fieldUV).r;
+  vec4 trailSample = texture2D(uTrail, fieldUV);
+  float trailIntensity = trailSample.b;
+  vec2 trailDir = trailSample.rg * 2.0 - 1.0;
 
-  transformed.x += trail * uTrailStrengthX * windStrength;
-  transformed.z += trail * uTrailStrengthZ * windStrength;
+  float push = trailIntensity * windStrength * uTrailStrengthX * (1.2 + uCursorSpeed * 1.8)
+             * (1.0 + uTrailSpring * 0.8);
+  transformed.x += trailDir.x * push;
+  transformed.z += trailDir.y * push;
 
   float projectedPos = instanceX * uGustDirX + instanceZ * uGustDirZ;
   float distFromFront = projectedPos - uGustFrontX;
 
-  float inGust = smoothstep(-uGustWidth, 0.0, distFromFront)
-               * smoothstep(uGustWidth * 0.4, 0.0, distFromFront + uGustWidth);
+  float lead = 1.0 - smoothstep(-15.0, 0.0, distFromFront);
+  float trailEdge = smoothstep(-uGustWidth, -uGustWidth * 0.5, distFromFront);
+  float inGust = lead * trailEdge * uGustBlend;
 
-  float displacement = inGust * uGustStrength * windStrength * aHeight * 1.8;
+  float t = uTime;
+  float rPhase = aRandom * 6.2832;
+  float freqVar = 0.7 + aHeight * 0.5 + aRandom * 0.3;
+
+  float scroll = instanceX * uGustDirX + instanceZ * uGustDirZ;
+  float cross = -instanceZ * uGustDirX + instanceX * uGustDirZ;
+
+  float patchA = sin(scroll * 0.09 + rPhase * 0.2) * sin(cross * 0.07 + rPhase * 0.3 + 1.4);
+  float baseLean = 0.9 + patchA * 0.3;
+  float baseDisp = baseLean * uGustStrength;
+
+  float turbAmp = uGustStrength * 0.15;
+  float turb = sin(scroll * 0.19 + t * 1.2 * freqVar + rPhase) * 0.6
+             + sin(cross * 0.14 + t * 0.8 * freqVar + rPhase * 0.7 + 2.1) * 0.4;
+  float turbDisp = turb * turbAmp;
+
+  float crossDisp = sin(cross * 0.11 + t * 0.6 + rPhase * 0.5 + 1.8)
+                  * uGustStrength * 0.12;
+
+  float px = instanceX * 0.0613 + instanceZ * 0.0421;
+  float ambientFreq = 0.4 + aHeight * 0.4 + aRandom * 0.2;
+  float ambientX = sin(px + rPhase * 0.5 + t * 1.4 * ambientFreq) * 0.10
+                 + sin(px * 1.4 + rPhase + t * 0.85 * ambientFreq + 1.4) * 0.05;
+
+  float ambientScroll = instanceX * uAmbientDirX + instanceZ * uAmbientDirZ;
+  float ambientCross = -instanceZ * uAmbientDirX + instanceX * uAmbientDirZ;
+  float ambientPatch = sin(ambientScroll * 0.07 + rPhase * 0.15)
+                     * sin(ambientCross * 0.05 + rPhase * 0.22 + 2.1);
+  float ambientLean = uAmbientStrength * (1.0 + ambientPatch * 0.25);
+  float ambientBreeze = ambientLean
+                      * (0.85 + sin(ambientScroll * 0.04 + t * 0.22 + rPhase * 0.3) * 0.15);
+
+  // Gust displacement — rotates with gust direction
+  float gustDispX = inGust * (baseDisp + turbDisp) * windStrength * aHeight;
+  float gustDispZ = inGust * crossDisp * windStrength * aHeight;
+
+  // Ambient displacement — always in fixed ambient direction, independent of gust
+  float ambWindX = (ambientBreeze + ambientX) * windStrength * aHeight;
 
   vec4 worldPos = instanceMatrix * vec4(transformed, 1.0);
-  worldPos.x += displacement * uGustDirX;
-  worldPos.z += displacement * uGustDirZ * 0.3;
+  worldPos.x += gustDispX * uGustDirX - gustDispZ * uGustDirZ;
+  worldPos.z += gustDispX * uGustDirZ + gustDispZ * uGustDirX;
+  worldPos.x += ambWindX * uAmbientDirX;
+  worldPos.z += ambWindX * uAmbientDirZ;
+
+  float trailBend = length(vec2(trailDir.x * push, trailDir.y * push));
+  vCursorBend = clamp(trailBend / max(aHeight * 0.28, 0.08), 0.0, 1.0);
+
+  vWorldZ = instanceZ;
   gl_Position = projectionMatrix * modelViewMatrix * worldPos;
 }
 `;
 
 const fragmentShader = /* glsl */`
+uniform float uTime;
 varying vec2 vUv;
 varying float vRandom;
 varying vec2 vWorldNormal;
+varying float vCursorBend;
+varying float vWorldZ;
 
 void main() {
   float randVar = (vRandom - 0.5) * 2.0 * (10.0 / 255.0);
 
   vec3 baseColor = vec3(28.0 / 255.0, 58.0 / 255.0, 18.0 / 255.0) + vec3(randVar);
   vec3 midColor  = vec3(52.0 / 255.0, 105.0 / 255.0, 32.0 / 255.0);
-  vec3 tipPale   = vec3(195.0 / 255.0, 215.0 / 255.0, 155.0 / 255.0);
-  vec3 tipBright = vec3(225.0 / 255.0, 232.0 / 255.0, 190.0 / 255.0);
-  vec3 tipColor  = mix(tipPale, tipBright, smoothstep(0.70, 1.0, vUv.y));
+  vec3 tipPale = vec3(148.0 / 255.0, 195.0 / 255.0, 88.0 / 255.0);
+  vec3 tipBright = vec3(172.0 / 255.0, 215.0 / 255.0, 108.0 / 255.0);
+  vec3 bentBase = vec3(12.0 / 255.0, 32.0 / 255.0, 7.0 / 255.0);
+  vec3 bentMid = vec3(28.0 / 255.0, 60.0 / 255.0, 16.0 / 255.0);
+  vec3 bentTipLo = vec3(48.0 / 255.0, 92.0 / 255.0, 28.0 / 255.0);
+  vec3 bentTipHi = vec3(72.0 / 255.0, 128.0 / 255.0, 44.0 / 255.0);
+
+  float cursorBendAmt = pow(clamp(vCursorBend, 0.0, 1.0), 1.4);
+  vec3 tipColor = mix(tipPale, tipBright, smoothstep(0.70, 1.0, vUv.y));
 
   vec3 col = baseColor;
   col = mix(col, midColor, smoothstep(0.35, 0.50, vUv.y));
   col = mix(col, tipColor, smoothstep(0.70, 0.85, vUv.y));
+
+  vec3 bentCol = bentBase;
+  bentCol = mix(bentCol, bentMid, smoothstep(0.35, 0.50, vUv.y));
+  bentCol = mix(bentCol, bentTipLo, smoothstep(0.70, 0.85, vUv.y));
+  bentCol = mix(bentCol, bentTipHi, smoothstep(0.85, 1.00, vUv.y));
+
+  col = mix(col, bentCol, cursorBendAmt);
 
   float ao = smoothstep(0.0, 0.25, vUv.y);
   col *= (0.25 + 0.75 * ao);
@@ -687,7 +827,18 @@ void main() {
   col *= light;
 
   float specular = pow(max(0.0, vUv.y - 0.85) / 0.15, 2.0) * 0.4;
+  specular *= 1.0 - cursorBendAmt * 0.9;
   col += vec3(specular * 0.9, specular, specular * 0.7);
+
+  float depth = smoothstep(0.0, -95.0, vWorldZ);
+  vec3 hazeColor = vec3(72.0 / 255.0, 118.0 / 255.0, 48.0 / 255.0);
+  col = mix(col, hazeColor, depth * 0.82);
+
+  vec2 screenPos = gl_FragCoord.xy;
+  float grainTime = floor(uTime * 24.0);
+  float hash = fract(sin(dot(screenPos + grainTime, vec2(127.1, 311.7))) * 43758.5453);
+  float grain = (hash - 0.5) * 0.09;
+  col = clamp(col + vec3(grain), 0.0, 1.0);
 
   gl_FragColor = vec4(col, 1.0);
 }
@@ -700,18 +851,25 @@ const grassMaterial = new THREE.ShaderMaterial({
   uniforms: {
     projectionMatrix: { value: camera.projectionMatrix },
     modelViewMatrix:  { value: new THREE.Matrix4() },
+    uTime:            { value: 0 },
     uGustFrontX:      { value: 0 },
     uGustStrength:    { value: 0 },
     uGustWidth:       { value: 50 },
+    uGustBlend:       { value: 0.0 },
     uGustDirX:        { value: 1 },
     uGustDirZ:        { value: 0 },
+    uAmbientStrength: { value: 0.18 },
+    uAmbientDirX:     { value: 0.92 },
+    uAmbientDirZ:     { value: 0.38 },
     uWindSpeed:       { value: 0.75 },
     uWindStrength:    { value: 0.8 },
     uTurbulence:      { value: 0.3 },
     uWindDir:         { value: 0.125 },
     uTrail:           { value: trailRead.texture },
-    uTrailStrengthX:  { value: 0.7 },
-    uTrailStrengthZ:  { value: 0.7 },
+    uCursorSpeed:     { value: 0 },
+    uTrailStrengthX:  { value: 0.8 },
+    uTrailStrengthZ:  { value: 0.8 },
+    uTrailSpring:     { value: 0 },
     uFieldMinX:       { value: 0 },
     uFieldMaxX:       { value: 0 },
     uFieldMinZ:       { value: 0 },
@@ -731,7 +889,7 @@ let i = 0;
 while (i < BLADE_COUNT) {
   aHeight[i] = 0.4 + Math.random() * 0.8;
   aWidth[i]  = 0.018 + Math.random() * 0.017;
-  aLean[i]   = -0.15 + Math.random() * 0.4;
+  aLean[i]   = -0.25 + Math.random() * 0.7;
   aRandom[i] = Math.random();
 
   const x = fieldMinX + Math.random() * (fieldMaxX - fieldMinX);
@@ -841,6 +999,13 @@ muteBtn.addEventListener('click', () => {
 });
 
 const clock = new THREE.Clock();
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    clock.getDelta();
+  }
+});
+
 const INTRO_DURATION = 2.0;
 let introStartTime = null;
 
@@ -850,8 +1015,12 @@ camera.updateProjectionMatrix();
 function animate() {
   requestAnimationFrame(animate);
 
-  if (introStartTime === null) introStartTime = clock.getElapsedTime();
-  const introElapsed = clock.getElapsedTime() - introStartTime;
+  const delta = clock.getDelta();
+  const safeDelta = Math.min(delta, 0.05);
+  const elapsed = clock.elapsedTime;
+
+  if (introStartTime === null) introStartTime = elapsed;
+  const introElapsed = elapsed - introStartTime;
   if (introElapsed < INTRO_DURATION) {
     const t = introElapsed / INTRO_DURATION;
     const ease = 1 - Math.pow(1 - t, 3);
@@ -862,15 +1031,52 @@ function animate() {
     camera.updateProjectionMatrix();
   }
 
-  const delta = clock.getDelta();
-  updateGust(delta);
+  updateGust(safeDelta);
+
+  const springTarget = gust.strength;
+  const springForce = (springTarget - springPos) * SPRING_STIFFNESS;
+  // High damping only after spring has had 2.5s to ring; prevents killing overshoot on CALM entry
+  const activeDamping = (gust.state === 'CALM' && gust.phaseTimer > 5.0) ? SPRING_DAMPING * 4 : SPRING_DAMPING;
+  const dampForce = springVel * activeDamping;
+  springVel += (springForce - dampForce) * safeDelta;
+  springPos += springVel * safeDelta;
+
+  if (gust.state === 'ACTIVE' || gust.state === 'FADING') {
+    gustBlend = Math.min(1.0, gustBlend + safeDelta * 2.0);
+  } else if (gust.state === 'BUILDING') {
+    gustBlend = Math.min(1.0, gustBlend + safeDelta * 1.5);
+  } else {
+    const springSettled = Math.abs(springPos) < 0.03 && Math.abs(springVel) < 0.05;
+    if (springSettled) {
+      gustBlend = Math.max(0.0, gustBlend - safeDelta * 3.0);
+    }
+  }
+  grassMaterial.uniforms.uGustBlend.value = gustBlend;
+
+  grassMaterial.uniforms.uTime.value = elapsed;
   grassMaterial.uniforms.uGustFrontX.value = gust.frontX;
-  grassMaterial.uniforms.uGustStrength.value = gust.strength;
-  grassMaterial.uniforms.uGustWidth.value = gust.width;
-  grassMaterial.uniforms.uGustDirX.value = gust.dirX;
-  grassMaterial.uniforms.uGustDirZ.value = gust.dirZ;
+  grassMaterial.uniforms.uGustStrength.value = springPos;
+  currentWidth += (gust.width - currentWidth) * Math.min(1, safeDelta * 1.5);
+  grassMaterial.uniforms.uGustWidth.value = currentWidth;
+  const dirLerp = Math.min(1, safeDelta / Math.max(0.1, gust.buildDuration) * 3);
+  currentDirX += (gust.dirX - currentDirX) * dirLerp;
+  currentDirZ += (gust.dirZ - currentDirZ) * dirLerp;
+  grassMaterial.uniforms.uGustDirX.value = currentDirX;
+  grassMaterial.uniforms.uGustDirZ.value = currentDirZ;
+  updateCursorDirection();
   updateTrail();
   updateAudioFromTrail();
+
+  const cursorOnGrass =
+    cursorTrailUV.x >= 0 && cursorTrailUV.x <= 1 &&
+    cursorTrailUV.y >= 0 && cursorTrailUV.y <= 1;
+  const trailTarget = Math.min(1, smoothVelocity * 0.8) * (cursorOnGrass ? 1 : 0);
+  const tForce = (trailTarget - trailSpring) * TRAIL_STIFFNESS;
+  const tDamp = trailSpringVel * TRAIL_DAMPING;
+  trailSpringVel += (tForce - tDamp) * safeDelta;
+  trailSpring += trailSpringVel * safeDelta;
+  grassMaterial.uniforms.uTrailSpring.value = trailSpring;
+
   grass.updateMatrixWorld();
   grass.material.uniforms.projectionMatrix.value.copy(camera.projectionMatrix);
   grass.material.uniforms.modelViewMatrix.value.multiplyMatrices(
