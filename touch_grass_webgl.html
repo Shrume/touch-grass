@@ -7,7 +7,12 @@
 <style>
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { width: 100%; height: 100%; overflow: hidden; background: #040a01; }
-canvas { display: block; width: 100%; height: 100%; }
+canvas {
+  display: block;
+  position: fixed;
+  inset: 0;
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cg fill='none' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 20 C8 26 12 30 16 30 C20 30 24 26 24 20 L24 16' fill='rgba(255,255,255,0.15)' stroke='white'/%3E%3Cline x1='16' y1='16' x2='16' y2='6'/%3E%3Cellipse cx='16' cy='5.5' rx='1.5' ry='1.5'/%3E%3Cline x1='19.5' y1='16.5' x2='19.5' y2='5.5'/%3E%3Cellipse cx='19.5' cy='5' rx='1.5' ry='1.5'/%3E%3Cline x1='23' y1='17' x2='23' y2='7'/%3E%3Cellipse cx='23' cy='6.5' rx='1.5' ry='1.5'/%3E%3Cline x1='26' y1='18' x2='26' y2='10'/%3E%3Cellipse cx='26' cy='9.5' rx='1.5' ry='1.5'/%3E%3Cpath d='M8 20 C8 18 6 16 7 14 C8 12 10 13 10 16'/%3E%3C/g%3E%3C/svg%3E") 12 4, default;
+}
 
 #ui-panels {
   position: fixed;
@@ -89,9 +94,8 @@ canvas { display: block; width: 100%; height: 100%; }
   box-shadow: 0 1px 4px rgba(0,0,0,0.5);
 }
 
-#mute-btn {
+#night-btn, #mute-btn {
   position: fixed;
-  bottom: 12px;
   right: 12px;
   padding: 8px 14px;
   border: 1px solid rgba(255,255,255,0.07);
@@ -107,11 +111,15 @@ canvas { display: block; width: 100%; height: 100%; }
   cursor: pointer;
   z-index: 10;
 }
-#mute-btn:hover { color: rgba(255,255,255,0.7); }
+#night-btn { bottom: 48px; }
+#mute-btn {
+  bottom: 12px;
+}
+#night-btn:hover, #mute-btn:hover { color: rgba(255,255,255,0.7); }
 
 #fullscreen-btn {
   position: fixed;
-  bottom: 48px;
+  bottom: 84px;
   right: 12px;
   padding: 8px 12px;
   border: 1px solid rgba(255,255,255,0.07);
@@ -165,8 +173,8 @@ canvas { display: block; width: 100%; height: 100%; }
   <button type="button" id="interaction-panel-toggle">INTERACTION ▸</button>
   <div id="interaction-panel-body">
   <div class="ctrl">
-    <div class="ctrl-top"><span class="ctrl-label">Brush Size</span><span class="ctrl-val" id="v-i-brush">0.022</span></div>
-    <input type="range" id="s-i-brush" min="0.002" max="0.05" value="0.022" step="0.001">
+    <div class="ctrl-top"><span class="ctrl-label">Brush Size</span><span class="ctrl-val" id="v-i-brush">0.010</span></div>
+    <input type="range" id="s-i-brush" min="0.002" max="0.05" value="0.01" step="0.001">
   </div>
   <div class="ctrl">
     <div class="ctrl-top"><span class="ctrl-label">Brush Strength</span><span class="ctrl-val" id="v-i-str">0.85</span></div>
@@ -189,20 +197,27 @@ canvas { display: block; width: 100%; height: 100%; }
 </div>
 
 <button type="button" id="fullscreen-btn" title="Fullscreen">⤢</button>
+<div id="stats-panel" style="
+  position: fixed; bottom: 120px; right: 12px;
+  background: rgba(0,0,0,0.75); color: #8fc; font-family: monospace;
+  font-size: 10px; padding: 8px 10px; line-height: 1.8;
+  border: 1px solid #2a4a2a; z-index: 20; min-width: 180px;
+"></div>
+<button type="button" id="night-btn">NIGHT</button>
 <button type="button" id="mute-btn">MUTE</button>
 
 <script type="module">
 import * as THREE from 'three';
 
-const BLADE_COUNT = 150000;
+const BLADE_NEAR  = 260000;
+const BLADE_FAR   = 140000;
+const BLADE_COUNT = BLADE_NEAR + BLADE_FAR;
 
 let fieldMinX, fieldMaxX, fieldMinZ, fieldMaxZ;
 
 // ── Scene ─────────────────────────────────────────────────────────────────────
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setClearColor(0x040a01, 1);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.0));
 document.body.appendChild(renderer.domElement);
 
 // ── Mouse trail (ping-pong render target) ───────────────────────────────────
@@ -230,6 +245,7 @@ uniform sampler2D uPrevTrail;
 uniform float uFade;
 uniform float uBrushSize;
 uniform float uBrushStrength;
+uniform float uFieldAspect;
 varying vec2 vUv;
 void main() {
   vec4 prev = texture2D(uPrevTrail, vUv);
@@ -237,16 +253,21 @@ void main() {
   prev.rg = mix(vec2(0.5), prev.rg, prev.b);
   if (prev.b < 0.012) prev = vec4(0.5, 0.5, 0.0, 1.0);
 
-  float dist = length(vUv - uMouse);
-  float speedScale = uCursorSpeed;
-  float brush = smoothstep(uBrushSize, 0.0, dist) * uBrushStrength * (0.4 + speedScale * 0.6);
+  vec2 trailDelta = vUv - uMouse;
+  trailDelta.x *= uFieldAspect;
+  float dist = length(trailDelta);
+  float brush = smoothstep(uBrushSize, 0.0, dist) * uBrushStrength * pow(max(0.0, uCursorSpeed), 0.7);
 
   vec2 encodedDir = uCursorDir * 0.5 + 0.5;
 
+  vec2 existingDir = prev.rg * 2.0 - 1.0;
+  float trailAlignment = dot(existingDir, uCursorDir);
+  float dirMixRate = brush * (trailAlignment > 0.0 ? 0.35 : 0.08);
+
   vec3 newColor = prev.rgb;
   if (brush > 0.0) {
-    newColor.r = mix(prev.r, encodedDir.x, brush * 0.8);
-    newColor.g = mix(prev.g, encodedDir.y, brush * 0.8);
+    newColor.r = mix(prev.r, encodedDir.x, dirMixRate);
+    newColor.g = mix(prev.g, encodedDir.y, dirMixRate);
     newColor.b = min(1.0, prev.b + brush);
   } else {
     newColor.b = prev.b;
@@ -262,8 +283,9 @@ const trailMaterial = new THREE.ShaderMaterial({
     uCursorSpeed:   { value: 0 },
     uPrevTrail:     { value: trailRead.texture },
     uFade:          { value: 0.996 },
-    uBrushSize:     { value: 0.022 },
+    uBrushSize:     { value: 0.01 },
     uBrushStrength: { value: 0.85 },
+    uFieldAspect:   { value: 1.0 },
   },
   vertexShader: trailVertShader,
   fragmentShader: trailFragShader,
@@ -271,6 +293,102 @@ const trailMaterial = new THREE.ShaderMaterial({
 
 const trailQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), trailMaterial);
 trailScene.add(trailQuad);
+
+// ── Mow map (permanent cuts, no fade) ───────────────────────────────────────
+const mowRT  = new THREE.WebGLRenderTarget(256, 256, {
+  type:   THREE.HalfFloatType,
+  format: THREE.RGBAFormat,
+});
+const mowRTB = new THREE.WebGLRenderTarget(256, 256, {
+  type:   THREE.HalfFloatType,
+  format: THREE.RGBAFormat,
+});
+let mowRead  = mowRT;
+let mowWrite = mowRTB;
+
+const mowFragShader = /* glsl */`
+uniform sampler2D uPrevMow;
+uniform vec2 uMouse;
+uniform float uBrushSize;
+uniform float uCutMode;
+uniform float uFieldAspect;
+varying vec2 vUv;
+void main() {
+  float prev = texture2D(uPrevMow, vUv).r;
+  vec2 mowDelta = vUv - uMouse;
+  mowDelta.x *= uFieldAspect;
+  float dist = length(mowDelta);
+  float brush = uCutMode > 0.5
+    ? step(dist, uBrushSize * 0.6)
+    : 0.0;
+  // Linear decay: 1/(60fps * 20s total) = decrement per frame.
+  float decayRate = 1.0 / (60.0 * 20.0);
+  float faded = max(0.0, prev - decayRate);
+  gl_FragColor = vec4(max(faded, brush), 0.0, 0.0, 1.0);
+}
+`;
+
+const mowMaterial = new THREE.ShaderMaterial({
+  uniforms: {
+    uPrevMow:    { value: mowRead.texture },
+    uMouse:      { value: new THREE.Vector2(-10, -10) },
+    uBrushSize:  { value: 0.01 },
+    uCutMode:    { value: 0.0 },
+    uFieldAspect: { value: 1.0 },
+  },
+  vertexShader:   trailVertShader,
+  fragmentShader: mowFragShader,
+});
+
+const mowScene = new THREE.Scene();
+const mowMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mowMaterial);
+mowScene.add(mowMesh);
+
+let isMouseDown = false;
+
+const MOW_CELLS_X = 48;
+const MOW_CELLS_Z = 48;
+const mowCells    = new Float32Array(MOW_CELLS_X * MOW_CELLS_Z);
+let   mowElapsed  = 0;
+
+function mowCellIdx(wx, wz) {
+  const u = Math.max(0, Math.min(1, (wx - fieldMinX) / (fieldMaxX - fieldMinX)));
+  const v = Math.max(0, Math.min(1, (wz - fieldMinZ) / (fieldMaxZ - fieldMinZ)));
+  const cx = Math.min(MOW_CELLS_X - 1, Math.floor(u * MOW_CELLS_X));
+  const cz = Math.min(MOW_CELLS_Z - 1, Math.floor(v * MOW_CELLS_Z));
+  return cz * MOW_CELLS_X + cx;
+}
+
+function mowCellCut(wx, wz) {
+  const idx = mowCellIdx(wx, wz);
+  return mowCells[idx] > 0 && (mowElapsed - mowCells[idx]) < 20.0;
+}
+
+function mowCellMark(wx, wz) {
+  mowCells[mowCellIdx(wx, wz)] = mowElapsed;
+}
+
+function updateMow(safeDelta) {
+  mowElapsed += safeDelta;
+  mowMaterial.uniforms.uBrushSize.value = trailMaterial.uniforms.uBrushSize.value;
+  mowMaterial.uniforms.uPrevMow.value = mowRead.texture;
+  mowMaterial.uniforms.uMouse.value.set(cursorTrailUV.x, cursorTrailUV.y);
+  mowMaterial.uniforms.uCutMode.value = isMouseDown ? 1.0 : 0.0;
+  if (isMouseDown && cursorTrailUV.x >= 0 && cursorTrailUV.x <= 1
+                  && cursorTrailUV.y >= 0 && cursorTrailUV.y <= 1) {
+    const alreadyCut = mowCellCut(cursorWorldX, cursorWorldZ);
+    mowCellMark(cursorWorldX, cursorWorldZ);
+    if (!alreadyCut) {
+      spawnClips(cursorWorldX, cursorWorldZ, 1.0);
+      fireCutSnip();
+    }
+  }
+  renderer.setRenderTarget(mowWrite);
+  renderer.render(mowScene, trailCamera);
+  renderer.setRenderTarget(null);
+  const tmp = mowRead; mowRead = mowWrite; mowWrite = tmp;
+  grassMaterial.uniforms.uMowMap.value = mowRead.texture;
+}
 
 // ── Gust state machine ────────────────────────────────────────────────────────
 let gustFadeStart = 0;
@@ -285,7 +403,7 @@ const SPRING_DAMPING = 0.9;
 let trailSpring = 0;
 let trailSpringVel = 0;
 const TRAIL_STIFFNESS = 3.0;
-const TRAIL_DAMPING = 0.8;
+const TRAIL_DAMPING = 3.5;
 console.log('Springs:', SPRING_STIFFNESS, SPRING_DAMPING, TRAIL_STIFFNESS, TRAIL_DAMPING);
 const gust = {
   state: 'CALM',
@@ -366,6 +484,14 @@ let audioCtx = null;
 let noise1, noise2, noiseWind, noiseRustle, bandpass, lowpass, windHighpass, whooshFilter, rustleHighpass, rustleFilter, gain1, gain2, gainWhoosh, gainRustle, panner, windPanner, rustlePanner;
 let audioReady = false;
 let audioMuted = false;
+let dayAudioBuffer   = null;
+let nightAudioBuffer = null;
+let dayAmbienceGain;
+let dayAmbienceSource   = null;
+let nightAmbienceSource = null;
+let cricketMasterGain;
+let cutDragSrc  = null;
+let cutDragGain = null;
 let lastMouseX = 0;
 let lastMouseY = 0;
 let smoothVelocity = 0;
@@ -385,11 +511,18 @@ function initAudio() {
 
   audioCtx = new AudioContext();
 
-  noise1 = audioCtx.createScriptProcessor(2048, 0, 1);
-  noise1.onaudioprocess = e => {
-    const out = e.outputBuffer.getChannelData(0);
-    for (let i = 0; i < out.length; i++) out[i] = Math.random() * 2 - 1;
-  };
+  function createLoopingNoise() {
+    const noiseBuffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 2, audioCtx.sampleRate);
+    const noiseData = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < noiseData.length; i++) noiseData[i] = Math.random() * 2 - 1;
+    const noiseNode = audioCtx.createBufferSource();
+    noiseNode.buffer = noiseBuffer;
+    noiseNode.loop = true;
+    noiseNode.start();
+    return noiseNode;
+  }
+
+  noise1 = createLoopingNoise();
   bandpass = audioCtx.createBiquadFilter();
   bandpass.type = 'bandpass';
   bandpass.frequency.value = 2800;
@@ -399,11 +532,7 @@ function initAudio() {
   noise1.connect(bandpass);
   bandpass.connect(gain1);
 
-  noise2 = audioCtx.createScriptProcessor(2048, 0, 1);
-  noise2.onaudioprocess = e => {
-    const out = e.outputBuffer.getChannelData(0);
-    for (let i = 0; i < out.length; i++) out[i] = Math.random() * 2 - 1;
-  };
+  noise2 = createLoopingNoise();
   lowpass = audioCtx.createBiquadFilter();
   lowpass.type = 'lowpass';
   lowpass.frequency.value = 400;
@@ -451,11 +580,7 @@ function initAudio() {
   rustlePanner.positionZ.value = -80;
   rustlePanner.connect(audioCtx.destination);
 
-  noiseWind = audioCtx.createScriptProcessor(2048, 0, 1);
-  noiseWind.onaudioprocess = e => {
-    const out = e.outputBuffer.getChannelData(0);
-    for (let i = 0; i < out.length; i++) out[i] = Math.random() * 2 - 1;
-  };
+  noiseWind = createLoopingNoise();
   windHighpass = audioCtx.createBiquadFilter();
   windHighpass.type = 'highpass';
   windHighpass.frequency.value = 180;
@@ -470,11 +595,7 @@ function initAudio() {
   whooshFilter.connect(gainWhoosh);
   gainWhoosh.connect(windPanner);
 
-  noiseRustle = audioCtx.createScriptProcessor(2048, 0, 1);
-  noiseRustle.onaudioprocess = e => {
-    const out = e.outputBuffer.getChannelData(0);
-    for (let i = 0; i < out.length; i++) out[i] = Math.random() * 2 - 1;
-  };
+  noiseRustle = createLoopingNoise();
   rustleHighpass = audioCtx.createBiquadFilter();
   rustleHighpass.type = 'highpass';
   rustleHighpass.frequency.value = 1800;
@@ -489,7 +610,105 @@ function initAudio() {
   rustleFilter.connect(gainRustle);
   gainRustle.connect(rustlePanner);
 
+  cricketMasterGain = audioCtx.createGain();
+  cricketMasterGain.gain.value = 0;
+  cricketMasterGain.connect(audioCtx.destination);
+
+  dayAmbienceGain = audioCtx.createGain();
+  dayAmbienceGain.gain.value = 0.0;
+  dayAmbienceGain.connect(audioCtx.destination);
+
+  async function loadAmbienceFiles() {
+    try {
+      const [dayResp, nightResp] = await Promise.all([
+        fetch('/audio/day.mp3'),
+        fetch('/audio/night.mp3'),
+      ]);
+      const [dayArr, nightArr] = await Promise.all([
+        dayResp.arrayBuffer(),
+        nightResp.arrayBuffer(),
+      ]);
+      [dayAudioBuffer, nightAudioBuffer] = await Promise.all([
+        audioCtx.decodeAudioData(dayArr),
+        audioCtx.decodeAudioData(nightArr),
+      ]);
+      applyAmbiencePlayback();
+      if (isNight) crossfadeToNight();
+      else crossfadeToDay();
+    } catch(e) {
+      console.warn('Ambience audio failed to load:', e);
+    }
+  }
+
+  loadAmbienceFiles();
+
   if (audioCtx.state === 'suspended') audioCtx.resume();
+  initCutAudio();
+}
+
+function initCutAudio() {
+  if (cutDragSrc || !audioCtx) return;
+  const cutDragLen = audioCtx.sampleRate * 4;
+  const cutDragBuf = audioCtx.createBuffer(1, cutDragLen, audioCtx.sampleRate);
+  const cutDragData = cutDragBuf.getChannelData(0);
+  let b0=0, b1=0, b2=0;
+  for (let i = 0; i < cutDragLen; i++) {
+    const w = Math.random() * 2 - 1;
+    b0 = 0.99886*b0 + w*0.0555179;
+    b1 = 0.99332*b1 + w*0.0750759;
+    b2 = 0.96900*b2 + w*0.1538520;
+    cutDragData[i] = (b0 + b1 + b2 + w*0.0084) * 0.2;
+  }
+  cutDragSrc = audioCtx.createBufferSource();
+  cutDragSrc.buffer = cutDragBuf;
+  cutDragSrc.loop = true;
+
+  const cutHp = audioCtx.createBiquadFilter();
+  cutHp.type = 'highpass'; cutHp.frequency.value = 2800;
+  const cutLp = audioCtx.createBiquadFilter();
+  cutLp.type = 'lowpass'; cutLp.frequency.value = 8500;
+
+  cutDragGain = audioCtx.createGain();
+  cutDragGain.gain.value = 0;
+
+  cutDragSrc.connect(cutHp);
+  cutHp.connect(cutLp);
+  cutLp.connect(cutDragGain);
+  cutDragGain.connect(audioCtx.destination);
+  cutDragSrc.start();
+}
+
+function fireCutSnip() {
+  if (!audioCtx || audioMuted) return;
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  const now = audioCtx.currentTime;
+  const sr  = audioCtx.sampleRate;
+  const dur = 0.055;
+  const buf = audioCtx.createBuffer(1, Math.ceil(dur * sr), sr);
+  const d   = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+
+  const src = audioCtx.createBufferSource(); src.buffer = buf;
+
+  const bp = audioCtx.createBiquadFilter();
+  bp.type = 'bandpass'; bp.frequency.value = 1300; bp.Q.value = 1.6;
+
+  const ws = audioCtx.createWaveShaper();
+  const curve = new Float32Array(128);
+  for (let i = 0; i < 128; i++) {
+    const x = (i / 63.5) - 1;
+    curve[i] = Math.tanh(x * 2.2) * 0.78;
+  }
+  ws.curve = curve;
+
+  const g = audioCtx.createGain();
+  src.connect(bp); bp.connect(ws); ws.connect(g);
+  g.connect(audioCtx.destination);
+
+  g.gain.setValueAtTime(0, now);
+  g.gain.linearRampToValueAtTime(0.34, now + 0.002);
+  g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+  src.start(now); src.stop(now + dur + 0.01);
 }
 
 function tryInitAudio() {
@@ -506,9 +725,13 @@ function updateCursorDirection() {
     const dzRaw = cursorWorldZ - prevCursorWorldZ;
     const rawSpeed = Math.sqrt(dxRaw * dxRaw + dzRaw * dzRaw);
     smoothSpeed = smoothSpeed * 0.65 + rawSpeed * 0.35;
-    if (rawSpeed > 0.01) {
-      smoothDirX = smoothDirX * 0.6 + (dxRaw / rawSpeed) * 0.4;
-      smoothDirZ = smoothDirZ * 0.6 + (dzRaw / rawSpeed) * 0.4;
+    if (rawSpeed > 0.08) {
+      const newDirX = dxRaw / rawSpeed;
+      const newDirZ = dzRaw / rawSpeed;
+      const alignment = newDirX * smoothDirX + newDirZ * smoothDirZ;
+      const mixRate = alignment > 0 ? 0.12 : 0.03;
+      smoothDirX = smoothDirX * (1 - mixRate) + newDirX * mixRate;
+      smoothDirZ = smoothDirZ * (1 - mixRate) + newDirZ * mixRate;
     }
     prevCursorWorldX = cursorWorldX;
     prevCursorWorldZ = cursorWorldZ;
@@ -574,7 +797,7 @@ function updateAudioFromTrail() {
   gain1.gain.value = audioMuted ? 0 : g1;
   gain2.gain.value = audioMuted ? 0 : g2;
   bandpass.frequency.value = 2000 + cursorActivity * 2500;
-  panner.pan.value = (mouseScreenX / window.innerWidth) * 2 - 1;
+  panner.pan.value = Math.max(-1, Math.min(1, (mouseScreenX / window.innerWidth) * 2 - 1));
 
   const gustAudioStrength = gust.strength;
 
@@ -602,8 +825,19 @@ function updateAudioFromTrail() {
 renderer.domElement.addEventListener('mousemove', e => {
   updateMouseFromEvent(e.clientX, e.clientY);
 });
+renderer.domElement.addEventListener('mousedown', () => {
+  tryInitAudio();
+  isMouseDown = true;
+  renderer.domElement.style.cursor = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cg stroke='white' stroke-width='1.8' stroke-linecap='round' fill='none'%3E%3Ccircle cx='8' cy='24' r='3'/%3E%3Ccircle cx='8' cy='8' r='3'/%3E%3Cline x1='10.1' y1='21.9' x2='26' y2='6'/%3E%3Cline x1='10.1' y1='10.1' x2='26' y2='26'/%3E%3C/g%3E%3C/svg%3E\") 16 16, crosshair";
+});
+renderer.domElement.addEventListener('mouseup', () => {
+  isMouseDown = false;
+  renderer.domElement.style.cursor = 'default';
+});
 renderer.domElement.addEventListener('click', () => tryInitAudio());
 renderer.domElement.addEventListener('mouseleave', () => {
+  isMouseDown = false;
+  renderer.domElement.style.cursor = 'default';
   trailMaterial.uniforms.uMouse.value.set(-10, -10);
   cursorTrailUV.x = -10;
   cursorTrailUV.y = -10;
@@ -634,6 +868,48 @@ const CAM_LOOK_Y = 1.0;
 const CAM_LOOK_Z = -29;
 const CAM_INTRO_START_FOV = 43;
 const CAM_INTRO_END_FOV = 35;
+const FIELD_MARGIN = 0.30;
+
+function computeFieldBounds(aspect) {
+  function sampleVisible(cy, cz, fov) {
+    const boundsCam = new THREE.PerspectiveCamera(fov, aspect, 0.1, 200);
+    boundsCam.position.set(0, cy, cz);
+    boundsCam.lookAt(0, CAM_LOOK_Y, CAM_LOOK_Z);
+    boundsCam.updateProjectionMatrix();
+    boundsCam.updateMatrixWorld(true);
+
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const raycaster = new THREE.Raycaster();
+    const hits = [];
+
+    for (let xi = -1; xi <= 1; xi++) {
+      for (let yi = -1; yi <= 1; yi++) {
+        raycaster.setFromCamera(new THREE.Vector2(xi, yi), boundsCam);
+        if (raycaster.ray.direction.y >= -0.001) continue;
+        const pt = new THREE.Vector3();
+        if (!raycaster.ray.intersectPlane(plane, pt)) continue;
+        hits.push(pt);
+      }
+    }
+
+    const xs = hits.map(p => p.x);
+    const zs = hits.map(p => p.z);
+    return { minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs) };
+  }
+
+  const start = sampleVisible(CAM_INTRO_START_Y, CAM_INTRO_START_Z, CAM_INTRO_START_FOV);
+  const end   = sampleVisible(CAM_INTRO_END_Y, CAM_INTRO_END_Z, CAM_INTRO_END_FOV);
+  const minX = Math.min(start.minX, end.minX);
+  const maxX = Math.max(start.maxX, end.maxX);
+  const minZ = Math.min(start.minZ, end.minZ);
+  const maxZ = Math.max(start.maxZ, end.maxZ);
+  const visW = maxX - minX;
+  const visD = maxZ - minZ;
+  fieldMinX = minX - visW * FIELD_MARGIN;
+  fieldMaxX = maxX + visW * FIELD_MARGIN;
+  fieldMinZ = minZ - visD * FIELD_MARGIN;
+  fieldMaxZ = maxZ + visD * FIELD_MARGIN;
+}
 
 const camera = new THREE.PerspectiveCamera(
   CAM_INTRO_START_FOV,
@@ -644,55 +920,18 @@ const camera = new THREE.PerspectiveCamera(
 camera.position.set(0, CAM_INTRO_START_Y, CAM_INTRO_START_Z);
 camera.lookAt(0, CAM_LOOK_Y, CAM_LOOK_Z);
 
-// Visible ground bounds at final camera pose (+ 25% margin)
-camera.position.set(0, CAM_INTRO_END_Y, CAM_INTRO_END_Z);
-camera.fov = CAM_INTRO_END_FOV;
-camera.lookAt(0, CAM_LOOK_Y, CAM_LOOK_Z);
-camera.updateProjectionMatrix();
-camera.updateMatrixWorld(true);
+function updateRendererSize() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  if (w === 0 || h === 0) return;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.0));
+  renderer.setSize(w, h);
+}
 
-const frustumCorners = [-1, 1].flatMap(x => [-1, 1].map(y => {
-  const vec = new THREE.Vector3(x, y, 0.5).unproject(camera);
-  const dir = vec.sub(camera.position).normalize();
-  const t = -camera.position.y / dir.y;
-  return camera.position.clone().add(dir.multiplyScalar(t));
-}));
-
-const xs = frustumCorners.map(v => v.x);
-const zs = frustumCorners.map(v => v.z);
-const visibleMinX = Math.min(...xs);
-const visibleMaxX = Math.max(...xs);
-const visibleMinZ = Math.min(...zs);
-const visibleMaxZ = Math.max(...zs);
-
-const marginX = (visibleMaxX - visibleMinX) * 0.25;
-const marginZ = (visibleMaxZ - visibleMinZ) * 0.25;
-fieldMinX = visibleMinX - marginX;
-fieldMaxX = visibleMaxX + marginX;
-fieldMinZ = visibleMinZ - marginZ;
-fieldMaxZ = visibleMaxZ + marginZ;
-
-console.log('Field bounds:', fieldMinX, fieldMaxX, fieldMinZ, fieldMaxZ);
-
-camera.position.set(0, CAM_INTRO_START_Y, CAM_INTRO_START_Z);
-camera.fov = CAM_INTRO_START_FOV;
-camera.lookAt(0, CAM_LOOK_Y, CAM_LOOK_Z);
-camera.updateProjectionMatrix();
-
-// ── Blade geometry (shared, base at Y = 0) ──────────────────────────────────
-const bladeGeometry = new THREE.PlaneGeometry(1, 1, 1, 6);
-bladeGeometry.translate(0, 0.5, 0);
-
-// ── Instanced attributes ────────────────────────────────────────────────────
-const aHeight = new Float32Array(BLADE_COUNT);
-const aWidth  = new Float32Array(BLADE_COUNT);
-const aLean   = new Float32Array(BLADE_COUNT);
-const aRandom = new Float32Array(BLADE_COUNT);
-
-bladeGeometry.setAttribute('aHeight', new THREE.InstancedBufferAttribute(aHeight, 1));
-bladeGeometry.setAttribute('aWidth',  new THREE.InstancedBufferAttribute(aWidth, 1));
-bladeGeometry.setAttribute('aLean',   new THREE.InstancedBufferAttribute(aLean, 1));
-bladeGeometry.setAttribute('aRandom', new THREE.InstancedBufferAttribute(aRandom, 1));
+updateRendererSize();
+renderer.setClearColor(0x0d1a09, 1);
 
 // ── Shaders ─────────────────────────────────────────────────────────────────
 const vertexShader = /* glsl */`
@@ -715,6 +954,8 @@ uniform float uFieldMinX;
 uniform float uFieldMaxX;
 uniform float uFieldMinZ;
 uniform float uFieldMaxZ;
+uniform sampler2D uMowMap;
+uniform float uCutHeight;
 
 attribute float aHeight;
 attribute float aWidth;
@@ -725,6 +966,9 @@ varying vec2 vUv;
 varying float vRandom;
 varying vec2 vWorldNormal;
 varying float vCursorBend;
+varying float vMow;
+varying float vBladeHeight;
+varying vec3 vWorldPos;
 
 void main() {
   vUv = uv;
@@ -738,12 +982,34 @@ void main() {
   pos.x += sin(aLean * uv.y * 0.4) * aHeight * 0.25;
   pos.x += sin(aLean * pow(uv.y, 0.7)) * aHeight * 0.65;
 
-  vec3 transformed = pos;
-
   float instanceX = instanceMatrix[3][0];
   float instanceZ = instanceMatrix[3][2];
 
-  float windStrength = pow(uv.y, 2.0);
+  vec2 mowUV = vec2(
+    (instanceX - uFieldMinX) / (uFieldMaxX - uFieldMinX),
+    (instanceZ - uFieldMinZ) / (uFieldMaxZ - uFieldMinZ)
+  );
+  float mowIntensity = texture2D(uMowMap, mowUV).r;
+  // Cut phase (0.5-1.0): stays at 50% height.
+  // Regrowth phase (0.0-0.5): linearly returns to full height.
+  float effectiveHeightScale;
+  if (mowIntensity > 0.5) {
+    effectiveHeightScale = 0.5;
+  } else {
+    effectiveHeightScale = 1.0 - mowIntensity;
+  }
+
+  if (mowIntensity > 0.01) {
+    pos.y = min(pos.y, aHeight * effectiveHeightScale);
+  }
+  float effectiveScale = effectiveHeightScale;
+  vMow = mowIntensity;
+  vBladeHeight = aHeight;
+
+  vec3 transformed = pos;
+
+  float windUvY = mowIntensity > 0.01 ? min(uv.y, effectiveHeightScale) : uv.y;
+  float windStrength = pow(windUvY, 2.0);
 
   vec2 fieldUV = vec2(
     (instanceX - uFieldMinX) / (uFieldMaxX - uFieldMinX),
@@ -753,8 +1019,7 @@ void main() {
   float trailIntensity = trailSample.b;
   vec2 trailDir = trailSample.rg * 2.0 - 1.0;
 
-  float push = trailIntensity * windStrength * uTrailStrengthX * (1.2 + uCursorSpeed * 1.8)
-             * (1.0 + uTrailSpring * 0.8);
+  float push = trailIntensity * windStrength * uTrailStrengthX * 2.5 * effectiveScale;
   transformed.x += trailDir.x * push;
   transformed.z += trailDir.y * push;
 
@@ -798,11 +1063,11 @@ void main() {
                       * (0.85 + sin(ambientScroll * 0.04 + t * 0.22 + rPhase * 0.3) * 0.15);
 
   // Gust displacement — rotates with gust direction
-  float gustDispX = inGust * (baseDisp + turbDisp) * windStrength * aHeight;
-  float gustDispZ = inGust * crossDisp * windStrength * aHeight;
+  float gustDispX = inGust * (baseDisp + turbDisp) * windStrength * aHeight * effectiveScale;
+  float gustDispZ = inGust * crossDisp * windStrength * aHeight * effectiveScale;
 
   // Ambient displacement — always in fixed ambient direction, independent of gust
-  float ambWindX = (ambientBreeze + ambientX) * windStrength * aHeight;
+  float ambWindX = (ambientBreeze + ambientX) * windStrength * aHeight * effectiveScale;
 
   vec4 worldPos = instanceMatrix * vec4(transformed, 1.0);
   worldPos.x += gustDispX * uGustDirX - gustDispZ * uGustDirZ;
@@ -810,8 +1075,9 @@ void main() {
   worldPos.x += ambWindX * uAmbientDirX;
   worldPos.z += ambWindX * uAmbientDirZ;
 
-  float trailBend = length(vec2(trailDir.x * push, trailDir.y * push));
-  vCursorBend = clamp(trailBend / max(aHeight * 0.28, 0.08), 0.0, 1.0);
+  vWorldPos = worldPos.xyz;
+
+  vCursorBend = pow(trailIntensity, 3.5);
 
   gl_Position = projectionMatrix * modelViewMatrix * worldPos;
 }
@@ -819,22 +1085,36 @@ void main() {
 
 const fragmentShader = /* glsl */`
 uniform float uTime;
+uniform vec3 uBaseColor;
+uniform vec3 uMidColor;
+uniform vec3 uTipPale;
+uniform vec3 uTipBright;
+uniform vec3 uSpecColor;
+uniform vec2 uSunDir;
+uniform float uLightMin;
+uniform float uAOMin;
+uniform float uCutHeight;
+uniform vec3 uBentBase;
+uniform vec3 uBentMid;
+uniform vec3 uBentTipLo;
+uniform vec3 uBentTipHi;
+uniform vec3 uFFLightPos[12];
+uniform float uFFLightBri[12];
 varying vec2 vUv;
 varying float vRandom;
 varying vec2 vWorldNormal;
 varying float vCursorBend;
+varying float vMow;
+varying float vBladeHeight;
+varying vec3 vWorldPos;
 
 void main() {
   float randVar = (vRandom - 0.5) * 2.0 * (10.0 / 255.0);
 
-  vec3 baseColor = vec3(28.0 / 255.0, 58.0 / 255.0, 18.0 / 255.0) + vec3(randVar);
-  vec3 midColor  = vec3(52.0 / 255.0, 105.0 / 255.0, 32.0 / 255.0);
-  vec3 tipPale = vec3(118.0 / 255.0, 188.0 / 255.0, 72.0 / 255.0);
-  vec3 tipBright = vec3(138.0 / 255.0, 208.0 / 255.0, 88.0 / 255.0);
-  vec3 bentBase = vec3(12.0 / 255.0, 32.0 / 255.0, 7.0 / 255.0);
-  vec3 bentMid = vec3(28.0 / 255.0, 60.0 / 255.0, 16.0 / 255.0);
-  vec3 bentTipLo = vec3(48.0 / 255.0, 92.0 / 255.0, 28.0 / 255.0);
-  vec3 bentTipHi = vec3(72.0 / 255.0, 128.0 / 255.0, 44.0 / 255.0);
+  vec3 baseColor = uBaseColor + vec3(randVar);
+  vec3 midColor  = uMidColor;
+  vec3 tipPale = uTipPale;
+  vec3 tipBright = uTipBright;
 
   float cursorBendAmt = pow(clamp(vCursorBend, 0.0, 1.0), 1.4);
   vec3 tipColor = mix(tipPale, tipBright, smoothstep(0.70, 1.0, vUv.y));
@@ -843,23 +1123,38 @@ void main() {
   col = mix(col, midColor, smoothstep(0.35, 0.50, vUv.y));
   col = mix(col, tipColor, smoothstep(0.70, 0.85, vUv.y));
 
-  vec3 bentCol = bentBase;
-  bentCol = mix(bentCol, bentMid, smoothstep(0.35, 0.50, vUv.y));
-  bentCol = mix(bentCol, bentTipLo, smoothstep(0.70, 0.85, vUv.y));
-  bentCol = mix(bentCol, bentTipHi, smoothstep(0.85, 1.00, vUv.y));
+  vec3 bentCol = uBentBase;
+  bentCol = mix(bentCol, uBentMid, smoothstep(0.35, 0.50, vUv.y));
+  bentCol = mix(bentCol, uBentTipLo, smoothstep(0.70, 0.85, vUv.y));
+  bentCol = mix(bentCol, uBentTipHi, smoothstep(0.85, 1.00, vUv.y));
 
   col = mix(col, bentCol, cursorBendAmt);
 
   float ao = smoothstep(0.0, 0.25, vUv.y);
-  col *= (0.25 + 0.75 * ao);
+  col *= (uAOMin + (1.0 - uAOMin) * ao);
 
-  float sunDot = dot(normalize(vWorldNormal), normalize(vec2(0.8, 0.6)));
-  float light = 0.6 + 0.4 * sunDot;
+  float sunDot = dot(normalize(vWorldNormal), normalize(uSunDir));
+  float light = uLightMin + (1.0 - uLightMin) * sunDot;
   col *= light;
 
   float specular = pow(max(0.0, vUv.y - 0.85) / 0.15, 2.0) * 0.4;
   specular *= 1.0 - cursorBendAmt * 0.9;
-  col += vec3(specular * 0.9, specular, specular * 0.7);
+  col += uSpecColor * specular;
+
+  float ffLight = 0.0;
+  for (int i = 0; i < 12; i++) {
+    if (uFFLightBri[i] < 0.01) continue;
+    vec3 delta = uFFLightPos[i] - vWorldPos;
+    float dist2 = dot(delta, delta);
+    ffLight += uFFLightBri[i] * (1.0 / (1.0 + dist2 * 0.8));
+  }
+  ffLight = clamp(ffLight * 0.35, 0.0, 0.25);
+  col += vec3(0.45, 0.72, 0.15) * ffLight;
+
+  if (vMow > 0.5) {
+    float atTop = smoothstep(uCutHeight * 0.85, uCutHeight, vUv.y * vBladeHeight);
+    col = mix(col, col * 1.35, atTop * 0.6);
+  }
 
   vec2 screenPos = gl_FragCoord.xy;
   float grainTime = floor(uTime * 24.0);
@@ -893,6 +1188,8 @@ const grassMaterial = new THREE.ShaderMaterial({
     uTurbulence:      { value: 0.3 },
     uWindDir:         { value: 0.125 },
     uTrail:           { value: trailRead.texture },
+    uMowMap:          { value: mowRead.texture },
+    uCutHeight:       { value: 0.5 },
     uCursorSpeed:     { value: 0 },
     uTrailStrengthX:  { value: 0.8 },
     uTrailStrengthZ:  { value: 0.8 },
@@ -901,57 +1198,522 @@ const grassMaterial = new THREE.ShaderMaterial({
     uFieldMaxX:       { value: 0 },
     uFieldMinZ:       { value: 0 },
     uFieldMaxZ:       { value: 0 },
+    uBaseColor:       { value: new THREE.Vector3(58 / 255, 100 / 255, 40 / 255) },
+    uMidColor:        { value: new THREE.Vector3(78 / 255, 130 / 255, 48 / 255) },
+    uTipPale:         { value: new THREE.Vector3(168 / 255, 216 / 255, 96 / 255) },
+    uTipBright:       { value: new THREE.Vector3(194 / 255, 232 / 255, 112 / 255) },
+    uSpecColor:       { value: new THREE.Vector3(0.9, 1.0, 0.7) },
+    uSunDir:          { value: new THREE.Vector2(0.8, 0.6) },
+    uLightMin:        { value: 0.62 },
+    uAOMin:           { value: 0.32 },
+    uBentBase:        { value: new THREE.Color(32 / 255, 62 / 255, 18 / 255) },
+    uBentMid:         { value: new THREE.Color(42 / 255, 78 / 255, 25 / 255) },
+    uBentTipLo:       { value: new THREE.Color(65 / 255, 118 / 255, 40 / 255) },
+    uBentTipHi:       { value: new THREE.Color(90 / 255, 152 / 255, 58 / 255) },
+    uFFLightPos:      { value: new Float32Array(12 * 3) },
+    uFFLightBri:      { value: new Float32Array(12) },
   },
 });
+
+computeFieldBounds(Math.min(16 / 9, camera.aspect));
+console.log('Field bounds:', fieldMinX, fieldMaxX, fieldMinZ, fieldMaxZ);
+
+const fieldAspect = (fieldMaxZ - fieldMinZ) / (fieldMaxX - fieldMinX);
+trailMaterial.uniforms.uFieldAspect.value = fieldAspect;
+mowMaterial.uniforms.uFieldAspect.value = fieldAspect;
 
 grassMaterial.uniforms.uFieldMinX.value = fieldMinX;
 grassMaterial.uniforms.uFieldMaxX.value = fieldMaxX;
 grassMaterial.uniforms.uFieldMinZ.value = fieldMinZ;
 grassMaterial.uniforms.uFieldMaxZ.value = fieldMaxZ;
 
-const grass = new THREE.InstancedMesh(bladeGeometry, grassMaterial, BLADE_COUNT);
+const bladeGeoNear = new THREE.PlaneGeometry(1, 1, 1, 3);
+bladeGeoNear.translate(0, 0.5, 0);
+const bladeGeoFar = new THREE.PlaneGeometry(1, 1, 1, 2);
+bladeGeoFar.translate(0, 0.5, 0);
+
+const aHeightNear = new Float32Array(BLADE_NEAR);
+const aWidthNear  = new Float32Array(BLADE_NEAR);
+const aLeanNear   = new Float32Array(BLADE_NEAR);
+const aRandomNear = new Float32Array(BLADE_NEAR);
+const aHeightFar  = new Float32Array(BLADE_FAR);
+const aWidthFar   = new Float32Array(BLADE_FAR);
+const aLeanFar    = new Float32Array(BLADE_FAR);
+const aRandomFar  = new Float32Array(BLADE_FAR);
+
+bladeGeoNear.setAttribute('aHeight', new THREE.InstancedBufferAttribute(aHeightNear, 1));
+bladeGeoNear.setAttribute('aWidth',  new THREE.InstancedBufferAttribute(aWidthNear, 1));
+bladeGeoNear.setAttribute('aLean',   new THREE.InstancedBufferAttribute(aLeanNear, 1));
+bladeGeoNear.setAttribute('aRandom', new THREE.InstancedBufferAttribute(aRandomNear, 1));
+bladeGeoFar.setAttribute('aHeight', new THREE.InstancedBufferAttribute(aHeightFar, 1));
+bladeGeoFar.setAttribute('aWidth',  new THREE.InstancedBufferAttribute(aWidthFar, 1));
+bladeGeoFar.setAttribute('aLean',   new THREE.InstancedBufferAttribute(aLeanFar, 1));
+bladeGeoFar.setAttribute('aRandom', new THREE.InstancedBufferAttribute(aRandomFar, 1));
+
+const grassNear = new THREE.InstancedMesh(bladeGeoNear, grassMaterial, BLADE_NEAR);
+const grassFar  = new THREE.InstancedMesh(bladeGeoFar,  grassMaterial, BLADE_FAR);
 const dummy = new THREE.Object3D();
 
-let i = 0;
-while (i < BLADE_COUNT) {
-  aHeight[i] = 0.4 + Math.random() * 0.8;
-  aLean[i]   = -0.25 + Math.random() * 0.7;
-  aRandom[i] = Math.random();
+const cols = Math.ceil(Math.sqrt(BLADE_COUNT * 2));
+const slotW = (fieldMaxX - fieldMinX) / cols;
 
-  const x = fieldMinX + Math.random() * (fieldMaxX - fieldMinX);
-  const zT = Math.pow(Math.random(), 0.55);
-  const z = fieldMinZ + zT * (fieldMaxZ - fieldMinZ);
-
-  const depthT = (z - fieldMinZ) / (fieldMaxZ - fieldMinZ);
+for (let n = 0; n < BLADE_NEAR; n++) {
+  const col = n % cols;
+  const x   = fieldMinX + (col + Math.random()) * slotW;
+  const zT  = 0.28 + Math.pow(Math.random(), 0.22) * 0.62;
+  const z   = fieldMinZ + zT * (fieldMaxZ - fieldMinZ);
+  const depthT  = (z - fieldMinZ) / (fieldMaxZ - fieldMinZ);
+  const height  = 0.4 + Math.random() * 0.8;
+  const lean    = -0.25 + Math.random() * 0.7;
+  const random  = Math.random();
   const widthBase = 0.018 + Math.random() * 0.017;
-  aWidth[i] = widthBase * (0.8 + depthT * 0.3);
-
+  const width   = widthBase * (0.8 + depthT * 0.3);
+  aHeightNear[n] = height;
+  aLeanNear[n]   = lean;
+  aRandomNear[n] = random;
+  aWidthNear[n]  = width;
   dummy.position.set(x, 0, z);
   dummy.rotation.set(0, 0, 0);
   dummy.updateMatrix();
-  grass.setMatrixAt(i, dummy.matrix);
-  i++;
+  grassNear.setMatrixAt(n, dummy.matrix);
 }
-grass.instanceMatrix.needsUpdate = true;
+
+for (let f = 0; f < BLADE_FAR; f++) {
+  const col = f % cols;
+  const x   = fieldMinX + (col + Math.random()) * slotW;
+  const zT  = 0.08 + Math.random() * 0.72;
+  const z   = fieldMinZ + zT * (fieldMaxZ - fieldMinZ);
+  const depthT  = (z - fieldMinZ) / (fieldMaxZ - fieldMinZ);
+  const height  = 0.4 + Math.random() * 0.8;
+  const lean    = -0.25 + Math.random() * 0.7;
+  const random  = Math.random();
+  const widthBase = 0.018 + Math.random() * 0.017;
+  const width   = widthBase * (0.8 + depthT * 0.3);
+  aHeightFar[f] = height;
+  aLeanFar[f]   = lean;
+  aRandomFar[f] = random;
+  aWidthFar[f]  = width;
+  dummy.position.set(x, 0, z);
+  dummy.rotation.set(0, 0, 0);
+  dummy.updateMatrix();
+  grassFar.setMatrixAt(f, dummy.matrix);
+}
+grassNear.instanceMatrix.needsUpdate = true;
+grassFar.instanceMatrix.needsUpdate  = true;
+grassNear.frustumCulled = false;
+grassFar.frustumCulled  = false;
 
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(fieldMaxX - fieldMinX, fieldMaxZ - fieldMinZ),
-  new THREE.MeshBasicMaterial({ color: 0x0a1503 })
+  new THREE.MeshBasicMaterial({ color: 0x0a1406 })
 );
 ground.rotation.x = -Math.PI / 2;
 ground.position.set((fieldMinX + fieldMaxX) / 2, 0, (fieldMinZ + fieldMaxZ) / 2);
+ground.frustumCulled = false;
 scene.add(ground);
+const groundMesh = ground;
 
-scene.add(grass);
+function updateFieldGround() {
+  groundMesh.geometry.dispose();
+  groundMesh.geometry = new THREE.PlaneGeometry(fieldMaxX - fieldMinX, fieldMaxZ - fieldMinZ);
+  groundMesh.position.set((fieldMinX + fieldMaxX) / 2, 0, (fieldMinZ + fieldMaxZ) / 2);
+  grassMaterial.uniforms.uFieldMinX.value = fieldMinX;
+  grassMaterial.uniforms.uFieldMaxX.value = fieldMaxX;
+  grassMaterial.uniforms.uFieldMinZ.value = fieldMinZ;
+  grassMaterial.uniforms.uFieldMaxZ.value = fieldMaxZ;
+  trailMaterial.uniforms.uFieldAspect.value =
+    (fieldMaxZ - fieldMinZ) / (fieldMaxX - fieldMinX);
+  mowMaterial.uniforms.uFieldAspect.value =
+    (fieldMaxZ - fieldMinZ) / (fieldMaxX - fieldMinX);
+}
+
+const DAY_SNAPSHOT = {
+  base:      grassMaterial.uniforms.uBaseColor.value.clone(),
+  mid:       grassMaterial.uniforms.uMidColor.value.clone(),
+  tipPale:   grassMaterial.uniforms.uTipPale.value.clone(),
+  tipBright: grassMaterial.uniforms.uTipBright.value.clone(),
+  spec:      grassMaterial.uniforms.uSpecColor.value.clone(),
+  sunDir:    grassMaterial.uniforms.uSunDir.value.clone(),
+  lightMin:  grassMaterial.uniforms.uLightMin.value,
+  aoMin:     grassMaterial.uniforms.uAOMin.value,
+  sky:       renderer.getClearColor(new THREE.Color()),
+  ground:    groundMesh.material.color.clone(),
+  bentBase:  grassMaterial.uniforms.uBentBase.value.clone(),
+  bentMid:   grassMaterial.uniforms.uBentMid.value.clone(),
+  bentTipLo: grassMaterial.uniforms.uBentTipLo.value.clone(),
+  bentTipHi: grassMaterial.uniforms.uBentTipHi.value.clone(),
+};
+
+let isNight = false;
+
+let todTransitioning  = false;
+let todTransitionT    = 1.0;
+const TOD_TRANS_DUR   = 2.0;
+
+let fireflyDelay      = 0.0;
+let fireflyFadeT      = 0.0;
+
+let transitionFrom = null;
+let transitionTo   = null;
+
+function snapshotTOD() {
+  const u = grassMaterial.uniforms;
+  return {
+    base:      u.uBaseColor.value.clone(),
+    mid:       u.uMidColor.value.clone(),
+    tipPale:   u.uTipPale.value.clone(),
+    tipBright: u.uTipBright.value.clone(),
+    bentBase:  u.uBentBase.value.clone(),
+    bentMid:   u.uBentMid.value.clone(),
+    bentTipLo: u.uBentTipLo.value.clone(),
+    bentTipHi: u.uBentTipHi.value.clone(),
+    spec:      u.uSpecColor.value.clone(),
+    sunDir:    u.uSunDir.value.clone(),
+    lightMin:  u.uLightMin.value,
+    aoMin:     u.uAOMin.value,
+    sky:       renderer.getClearColor(new THREE.Color()),
+    ground:    groundMesh.material.color.clone(),
+  };
+}
+
+function applyAmbiencePlayback() {
+  if (dayAudioBuffer && !dayAmbienceSource) {
+    dayAmbienceSource = audioCtx.createBufferSource();
+    dayAmbienceSource.buffer = dayAudioBuffer;
+    dayAmbienceSource.loop   = true;
+    dayAmbienceSource.connect(dayAmbienceGain);
+    dayAmbienceSource.start();
+  }
+  if (nightAudioBuffer && !nightAmbienceSource) {
+    nightAmbienceSource = audioCtx.createBufferSource();
+    nightAmbienceSource.buffer = nightAudioBuffer;
+    nightAmbienceSource.loop   = true;
+    nightAmbienceSource.connect(cricketMasterGain);
+    nightAmbienceSource.start();
+  }
+}
+
+function crossfadeToNight() {
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+  dayAmbienceGain.gain.cancelScheduledValues(now);
+  cricketMasterGain.gain.cancelScheduledValues(now);
+  dayAmbienceGain.gain.setTargetAtTime(0.0, now, 1.2);
+  cricketMasterGain.gain.setTargetAtTime(
+    audioMuted ? 0 : 0.9, now, 1.8
+  );
+}
+
+function crossfadeToDay() {
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+  dayAmbienceGain.gain.cancelScheduledValues(now);
+  cricketMasterGain.gain.cancelScheduledValues(now);
+  cricketMasterGain.gain.setTargetAtTime(0.0, now, 1.2);
+  dayAmbienceGain.gain.setTargetAtTime(
+    audioMuted ? 0 : 0.15, now, 1.8
+  );
+}
+
+function applyTOD() {
+  transitionFrom = snapshotTOD();
+  todTransitionT = 0.0;
+  todTransitioning = true;
+
+  if (isNight) {
+    transitionTo = {
+      base:      new THREE.Vector3(18/255, 32/255, 52/255),
+      mid:       new THREE.Vector3(26/255, 48/255, 75/255),
+      tipPale:   new THREE.Vector3(58/255, 98/255, 148/255),
+      tipBright: new THREE.Vector3(72/255, 120/255, 172/255),
+      bentBase:  new THREE.Color(12/255,  24/255,  46/255),
+      bentMid:   new THREE.Color(18/255,  38/255,  68/255),
+      bentTipLo: new THREE.Color(32/255,  62/255, 108/255),
+      bentTipHi: new THREE.Color(45/255,  80/255, 132/255),
+      spec:      new THREE.Vector3(0.18, 0.22, 0.45),
+      sunDir:    new THREE.Vector2(0.3, 0.15),
+      lightMin:  0.35,
+      aoMin:     0.08,
+      sky:       new THREE.Color(3/255, 5/255, 12/255),
+      ground:    new THREE.Color(0, 0, 0),
+    };
+    fireflyFadeT = 0.0;
+    fireflyMaterial.uniforms.uVisible.value = 0.0;
+    fireflyDelay = 3.0;
+    applyAmbiencePlayback();
+    crossfadeToNight();
+  } else {
+    transitionTo = {
+      base:      DAY_SNAPSHOT.base.clone(),
+      mid:       DAY_SNAPSHOT.mid.clone(),
+      tipPale:   DAY_SNAPSHOT.tipPale.clone(),
+      tipBright: DAY_SNAPSHOT.tipBright.clone(),
+      bentBase:  DAY_SNAPSHOT.bentBase.clone(),
+      bentMid:   DAY_SNAPSHOT.bentMid.clone(),
+      bentTipLo: DAY_SNAPSHOT.bentTipLo.clone(),
+      bentTipHi: DAY_SNAPSHOT.bentTipHi.clone(),
+      spec:      new THREE.Vector3(...DAY_SNAPSHOT.spec.toArray()),
+      sunDir:    new THREE.Vector2(...DAY_SNAPSHOT.sunDir.toArray()),
+      lightMin:  DAY_SNAPSHOT.lightMin,
+      aoMin:     DAY_SNAPSHOT.aoMin,
+      sky:       DAY_SNAPSHOT.sky.clone(),
+      ground:    DAY_SNAPSHOT.ground.clone(),
+    };
+    fireflyFadeT = fireflyMaterial.uniforms.uVisible.value;
+    fireflyDelay = 0.0;
+    applyAmbiencePlayback();
+    crossfadeToDay();
+  }
+}
+
+scene.add(grassNear);
+scene.add(grassFar);
+
+const FIREFLY_PERMANENT = 380;
+const FIREFLY_TEMP      = 40;
+const FIREFLY_COUNT     = FIREFLY_PERMANENT + FIREFLY_TEMP;
+
+const ffPositions  = new Float32Array(FIREFLY_COUNT * 3);
+const ffBrightness = new Float32Array(FIREFLY_COUNT);
+
+const ffGeo = new THREE.BufferGeometry();
+ffGeo.setAttribute('position',    new THREE.BufferAttribute(ffPositions,  3).setUsage(THREE.DynamicDrawUsage));
+ffGeo.setAttribute('aBrightness', new THREE.BufferAttribute(ffBrightness, 1).setUsage(THREE.DynamicDrawUsage));
+
+const ff = Array.from({ length: FIREFLY_PERMANENT }, () => {
+  const zT   = Math.pow(Math.random(), 0.55);
+  const homeX = fieldMinX + Math.random() * (fieldMaxX - fieldMinX);
+  const homeZ = fieldMinZ + zT * (fieldMaxZ - fieldMinZ);
+
+  const wanderRadius = 1.2 + Math.random() * 4.5;
+  const wanderSpeed  = 0.15 + Math.random() * 0.55;
+  const heightMin    = 0.2  + Math.random() * 0.4;
+  const heightMax    = heightMin + 0.6 + Math.random() * 2.2;
+  const heightSpeed  = 0.08 + Math.random() * 0.18;
+  const glowSize     = 5.0  + Math.random() * 10.0;
+
+  return {
+    homeX, homeZ,
+    x: homeX, y: heightMin + Math.random() * (heightMax - heightMin), z: homeZ,
+    wanderRadius, wanderSpeed,
+    heightMin, heightMax, heightSpeed,
+    heightPhase: Math.random() * Math.PI * 2,
+    baseGlow:      0.3 + Math.random() * 0.4,
+    breatheSpeed:  0.18 + Math.random() * 0.28,
+    breathePhase:  Math.random() * Math.PI * 2,
+    fadeState:     'on',
+    fadeTimer:     6 + Math.random() * 12,
+    fadeProgress:  0,
+    brightness:    0,
+    glowSize,
+    windAccumX:  0,
+    windAccumZ:  0,
+  };
+});
+
+for (let i = 0; i < FIREFLY_TEMP; i++) {
+  ff.push({
+    homeX: 0, homeZ: 0,
+    x: 0, y: 0, z: 0,
+    wanderRadius: 1.5 + Math.random() * 2.0,
+    wanderSpeed:  0.3  + Math.random() * 0.4,
+    heightMin: 0.3, heightMax: 2.5,
+    heightSpeed: 0.2 + Math.random() * 0.2,
+    heightPhase: Math.random() * Math.PI * 2,
+    baseGlow: 0.7,
+    breatheSpeed: 0.4,
+    breathePhase: Math.random() * Math.PI * 2,
+    fadeState: 'on',
+    fadeTimer: 999,
+    fadeProgress: 0,
+    brightness: 0,
+    windAccumX: 0,
+    windAccumZ: 0,
+    isTemp:   true,
+    active:   false,
+    lifespan: 0,
+    maxLife:  0,
+    repelX:   0,
+    repelZ:   0,
+  });
+}
+
+const fireflyMaterial = new THREE.ShaderMaterial({
+  uniforms: {
+    uVisible: { value: 0.0 },
+  },
+  vertexShader: /* glsl */`
+    attribute float aBrightness;
+    uniform float uVisible;
+
+    varying float vBrightness;
+
+    void main() {
+      vBrightness = aBrightness * uVisible;
+      vec4 mvPos  = modelViewMatrix * vec4(position, 1.0);
+      gl_Position = projectionMatrix * mvPos;
+      float dist  = max(-mvPos.z, 1.0);
+      gl_PointSize = 150.0 / dist * (2.0 + aBrightness * 6.0) * uVisible;
+    }
+  `,
+  fragmentShader: /* glsl */`
+    varying float vBrightness;
+
+    void main() {
+      vec2 uv = gl_PointCoord * 2.0 - 1.0;
+      float r2 = dot(uv, uv);
+      if (r2 > 1.0) discard;
+
+      float core = exp(-r2 * 8.0);
+      float halo = exp(-r2 * 2.5) * 0.35;
+      float glow = core + halo;
+
+      vec3 color = mix(
+        vec3(0.55, 1.0, 0.18),
+        vec3(0.85, 1.0, 0.35),
+        core
+      );
+
+      gl_FragColor = vec4(color * glow * vBrightness, glow * vBrightness);
+    }
+  `,
+  transparent: true,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+});
+
+const fireflies = new THREE.Points(ffGeo, fireflyMaterial);
+scene.add(fireflies);
+
+const clipBladeGeo = new THREE.PlaneGeometry(1, 1, 1, 3);
+clipBladeGeo.translate(0, 0.5, 0);
+
+const clipMat = new THREE.ShaderMaterial({
+  uniforms: {
+    projectionMatrix: { value: camera.projectionMatrix },
+    modelViewMatrix:  { value: new THREE.Matrix4() },
+    uBaseColor:  grassMaterial.uniforms.uBaseColor,
+    uMidColor:   grassMaterial.uniforms.uMidColor,
+    uTipPale:    grassMaterial.uniforms.uTipPale,
+    uTipBright:  grassMaterial.uniforms.uTipBright,
+    uAOMin:      grassMaterial.uniforms.uAOMin,
+  },
+  vertexShader: /* glsl */`
+    attribute float aClipHeight;
+    attribute float aClipWidth;
+    attribute float aClipLean;
+    attribute float aClipAlpha;
+    varying vec2  vUv;
+    varying float vAlpha;
+    void main() {
+      vUv   = uv;
+      vAlpha = aClipAlpha;
+      vec3 pos = position;
+      pos.x *= aClipWidth;
+      pos.y *= aClipHeight;
+      pos.x += sin(aClipLean * uv.y * 0.4) * aClipHeight * 0.25;
+      pos.x += sin(aClipLean * pow(uv.y, 0.7)) * aClipHeight * 0.65;
+      gl_Position = projectionMatrix * modelViewMatrix
+                  * instanceMatrix * vec4(pos, 1.0);
+    }
+  `,
+  fragmentShader: /* glsl */`
+    uniform vec3  uBaseColor;
+    uniform vec3  uMidColor;
+    uniform vec3  uTipPale;
+    uniform vec3  uTipBright;
+    uniform float uAOMin;
+    varying vec2  vUv;
+    varying float vAlpha;
+    void main() {
+      vec3 col = uBaseColor;
+      col = mix(col, uMidColor,  smoothstep(0.35, 0.50, vUv.y));
+      col = mix(col, uTipPale,   smoothstep(0.70, 0.85, vUv.y));
+      col = mix(col, uTipBright, smoothstep(0.85, 1.00, vUv.y));
+      float ao = smoothstep(0.0, 0.25, vUv.y);
+      col *= (uAOMin + (1.0 - uAOMin) * ao);
+      if (vAlpha < 0.01) discard;
+      gl_FragColor = vec4(col, vAlpha);
+    }
+  `,
+  transparent: true,
+  side: THREE.DoubleSide,
+  depthWrite: false,
+});
+
+const CLIP_COUNT = 1200;
+
+const clipHeightArr = new Float32Array(CLIP_COUNT);
+const clipWidthArr  = new Float32Array(CLIP_COUNT);
+const clipLeanArr   = new Float32Array(CLIP_COUNT);
+const clipAlphaArr  = new Float32Array(CLIP_COUNT);
+
+clipBladeGeo.setAttribute('aClipHeight',
+  new THREE.InstancedBufferAttribute(clipHeightArr, 1).setUsage(THREE.DynamicDrawUsage));
+clipBladeGeo.setAttribute('aClipWidth',
+  new THREE.InstancedBufferAttribute(clipWidthArr,  1).setUsage(THREE.DynamicDrawUsage));
+clipBladeGeo.setAttribute('aClipLean',
+  new THREE.InstancedBufferAttribute(clipLeanArr,   1).setUsage(THREE.DynamicDrawUsage));
+clipBladeGeo.setAttribute('aClipAlpha',
+  new THREE.InstancedBufferAttribute(clipAlphaArr,  1).setUsage(THREE.DynamicDrawUsage));
+
+const clipMesh = new THREE.InstancedMesh(clipBladeGeo, clipMat, CLIP_COUNT);
+clipMesh.frustumCulled = false;
+clipMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+scene.add(clipMesh);
+
+const _cd = new THREE.Object3D();
+
+const clips = Array.from({ length: CLIP_COUNT }, () => ({
+  active: false,
+  x: 0, y: 0, z: 0,
+  velX: 0, velY: 0, velZ: 0,
+  rotY: 0, rotVelY: 0,
+  tiltX: 0, tiltZ: 0,
+  age: 0, maxAge: 0,
+  height: 0, width: 0, lean: 0,
+}));
+let clipIdx = 0;
+
+function spawnClips(wx, wz, fraction) {
+  const brushRadius = trailMaterial.uniforms.uBrushSize.value
+                    * (fieldMaxX - fieldMinX);
+  const count = Math.max(5, Math.round((18 + Math.floor(Math.random() * 12)) * (fraction || 1.0)));
+
+  for (let i = 0; i < count; i++) {
+    const c = clips[clipIdx % CLIP_COUNT];
+    clipIdx++;
+
+    const angle = Math.random() * Math.PI * 2;
+    const r     = Math.random() * brushRadius;
+
+    c.active  = true;
+    c.x       = wx + Math.cos(angle) * r;
+    c.z       = wz + Math.sin(angle) * r;
+    const origH = 0.4 + Math.random() * 0.8;
+    c.height  = origH * 0.5;
+    c.y       = origH * 0.5;
+    c.width   = 0.022 + Math.random() * 0.022;
+    c.lean    = (Math.random() - 0.5) * 0.5;
+
+    c.velX    = (Math.random() - 0.5) * 2.5;
+    c.velY    = 0.8 + Math.random() * 1.5;
+    c.velZ    = (Math.random() - 0.5) * 2.5;
+
+    c.tiltX   = (Math.random() - 0.5) * 1.2;
+    c.tiltZ   = (Math.random() - 0.5) * 1.2;
+    c.rotY    = Math.random() * Math.PI * 2;
+    c.rotVelY = (Math.random() - 0.5) * 6;
+
+    c.age     = 0;
+    c.maxAge  = 0.6 + Math.random() * 0.6;
+  }
+}
 
 // ── Resize ──────────────────────────────────────────────────────────────────
 function onResize() {
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-  renderer.setSize(w, h);
+  updateRendererSize();
+  updateFieldGround();
 }
 window.addEventListener('resize', onResize);
 
@@ -1016,6 +1778,13 @@ document.addEventListener('fullscreenchange', () => {
   fullscreenBtn.textContent = document.fullscreenElement ? '⛶' : '⤢';
 });
 
+const nightBtn = document.getElementById('night-btn');
+nightBtn.addEventListener('click', () => {
+  isNight = !isNight;
+  nightBtn.textContent = isNight ? 'DAY' : 'NIGHT';
+  applyTOD();
+});
+
 const muteBtn = document.getElementById('mute-btn');
 muteBtn.addEventListener('click', () => {
   tryInitAudio();
@@ -1026,10 +1795,19 @@ muteBtn.addEventListener('click', () => {
     gain2.gain.value = 0;
     gainWhoosh.gain.value = 0;
     gainRustle.gain.value = 0;
+    if (cutDragGain) cutDragGain.gain.value = 0;
+    dayAmbienceGain.gain.value   = audioMuted ? 0 : (isNight ? 0.0 : 0.15);
+    cricketMasterGain.gain.value = audioMuted ? 0 : (isNight ? 0.9 : 0.0);
   }
 });
 
 const clock = new THREE.Clock();
+
+let statsFPS = 0;
+let statsFrameTime = 0;
+let statsFrameCount = 0;
+let statsLastTime = performance.now();
+let statsFPSSmooth = 0;
 
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
@@ -1042,6 +1820,190 @@ let introStartTime = null;
 
 camera.updateProjectionMatrix();
 
+function updateFireflies(delta, elapsed, gustStrength, gustDirX, gustDirZ,
+                          cursorX, cursorZ, cursorSpeed, cursorOnGrass) {
+  const spawnThreshold = 4.0;
+  if (cursorOnGrass && cursorSpeed > spawnThreshold && Math.random() < cursorSpeed * 0.012) {
+    for (let s = FIREFLY_PERMANENT; s < FIREFLY_COUNT; s++) {
+      if (!ff[s].active) {
+        const f = ff[s];
+        f.active    = true;
+        f.homeX     = cursorX + (Math.random() - 0.5) * 3.0;
+        f.homeZ     = cursorZ + (Math.random() - 0.5) * 3.0;
+        f.x         = f.homeX;
+        f.y         = 0.2 + Math.random() * 0.5;
+        f.z         = f.homeZ;
+        f.lifespan  = 4.0 + Math.random() * 5.0;
+        f.maxLife   = f.lifespan;
+        f.fadeProgress = 0;
+        f.fadeState = 'on';
+        f.breathePhase = Math.random() * Math.PI * 2;
+        f.repelX    = (Math.random() - 0.5) * 2.0;
+        f.repelZ    = (Math.random() - 0.5) * 2.0;
+        f.windAccumX = 0;
+        f.windAccumZ = 0;
+        break;
+      }
+    }
+  }
+
+  for (let i = 0; i < FIREFLY_COUNT; i++) {
+    const f = ff[i];
+
+    const windPush = gustStrength * 1.2 * delta;
+    f.windAccumX += gustDirX * windPush;
+    f.windAccumZ += gustDirZ * windPush;
+    f.windAccumX *= 0.992;
+    f.windAccumZ *= 0.992;
+
+    const t = elapsed;
+    const wx = Math.sin(t * f.wanderSpeed * 0.41 + f.heightPhase)       * f.wanderRadius
+             + Math.sin(t * f.wanderSpeed * 0.17 + f.heightPhase * 1.6) * f.wanderRadius * 0.45;
+    const wz = Math.cos(t * f.wanderSpeed * 0.29 + f.heightPhase * 2.3) * f.wanderRadius
+             + Math.cos(t * f.wanderSpeed * 0.13 + f.heightPhase * 0.7) * f.wanderRadius * 0.4;
+
+    f.x = f.homeX + wx + f.windAccumX;
+    f.z = f.homeZ + wz + f.windAccumZ;
+
+    f.y = f.heightMin + (f.heightMax - f.heightMin) *
+          (Math.sin(performance.now() * 0.001 * f.heightSpeed + f.heightPhase) * 0.5 + 0.5);
+
+    if (cursorOnGrass) {
+      const dx = f.x - cursorX;
+      const dz = f.z - cursorZ;
+      const dist2 = dx * dx + dz * dz;
+      const repelRadius = 18.0;
+      if (dist2 < repelRadius && dist2 > 0.01) {
+        const dist  = Math.sqrt(dist2);
+        const force = (1.0 - dist2 / repelRadius) * 2.5 * delta;
+        f.windAccumX += (dx / dist) * force;
+        f.windAccumZ += (dz / dist) * force;
+        f.y = Math.min(f.heightMax + 1.5, f.y + force * 0.8);
+      }
+    }
+
+    if (f.isTemp) {
+      if (!f.active) {
+        f.brightness = 0;
+        ffPositions[i * 3]     = -9999;
+        ffPositions[i * 3 + 1] = -9999;
+        ffPositions[i * 3 + 2] = -9999;
+        ffBrightness[i]        = 0;
+        continue;
+      }
+
+      f.lifespan -= delta;
+      if (f.lifespan <= 0) {
+        f.active = false;
+        continue;
+      }
+
+      const lifeT = f.lifespan / f.maxLife;
+      const birthFade = Math.min(1.0, (f.maxLife - f.lifespan) / 0.4);
+      const deathFade = lifeT < 0.3 ? lifeT / 0.3 : 1.0;
+      f.fadeProgress = 0;
+
+      f.repelX *= 0.94;
+      f.repelZ *= 0.94;
+      f.x += f.repelX * delta;
+      f.z += f.repelZ * delta;
+
+      const breathe = Math.sin(elapsed * f.breatheSpeed + f.breathePhase) * 0.5 + 0.5;
+      f.brightness  = f.baseGlow * birthFade * deathFade
+                    * (0.6 + breathe * 0.4);
+    } else {
+      const breathe = Math.sin(elapsed * f.breatheSpeed + f.breathePhase) * 0.5 + 0.5;
+      const glowFromBreathe = f.baseGlow + breathe * (1.0 - f.baseGlow) * 0.45;
+
+      if (f.fadeState === 'on') {
+        f.fadeTimer -= delta;
+        f.fadeProgress = 0;
+        if (f.fadeTimer <= 0) {
+          f.fadeState    = 'fadingOut';
+          f.fadeProgress = 0;
+        }
+      } else if (f.fadeState === 'fadingOut') {
+        f.fadeProgress += delta / (1.0 + Math.random() * 0.8);
+        if (f.fadeProgress >= 1) {
+          f.fadeProgress = 1;
+          f.fadeState    = 'fadingIn';
+        }
+      } else if (f.fadeState === 'fadingIn') {
+        f.fadeProgress -= delta / (1.5 + Math.random() * 1.2);
+        if (f.fadeProgress <= 0) {
+          f.fadeProgress = 0;
+          f.fadeState    = 'on';
+          f.fadeTimer    = 6 + Math.random() * 14;
+        }
+      }
+
+      const fadeEnvelope = 1.0 - (3 * f.fadeProgress * f.fadeProgress
+                                 - 2 * f.fadeProgress * f.fadeProgress * f.fadeProgress);
+
+      f.brightness = glowFromBreathe * fadeEnvelope;
+    }
+
+    ffPositions[i * 3]     = f.x;
+    ffPositions[i * 3 + 1] = f.y;
+    ffPositions[i * 3 + 2] = f.z;
+    ffBrightness[i]        = f.brightness;
+  }
+
+  ffGeo.attributes.position.needsUpdate    = true;
+  ffGeo.attributes.aBrightness.needsUpdate = true;
+}
+
+function updateClips(delta) {
+  for (let i = 0; i < CLIP_COUNT; i++) {
+    const c = clips[i];
+
+    if (!c.active) {
+      clipAlphaArr[i] = 0;
+      _cd.position.set(0, -999, 0);
+      _cd.scale.setScalar(0.001);
+      _cd.updateMatrix();
+      clipMesh.setMatrixAt(i, _cd.matrix);
+      continue;
+    }
+
+    c.age += delta;
+    if (c.age >= c.maxAge || c.y < 0) {
+      c.active = false;
+      clipAlphaArr[i] = 0;
+      continue;
+    }
+
+    c.velY  -= 5.5 * delta;
+    c.x     += c.velX  * delta;
+    c.y     += c.velY  * delta;
+    c.z     += c.velZ  * delta;
+    c.rotY  += c.rotVelY * delta;
+    c.velX  *= 0.98;
+    c.velZ  *= 0.98;
+
+    const lifeT = c.age / c.maxAge;
+    clipAlphaArr[i] = lifeT < 0.3
+      ? 1.0
+      : Math.max(0, 1.0 - (lifeT - 0.3) / 0.7);
+
+    clipHeightArr[i] = c.height;
+    clipWidthArr[i]  = c.width;
+    clipLeanArr[i]   = c.lean;
+
+    _cd.position.set(c.x, Math.max(0, c.y), c.z);
+    _cd.rotation.set(c.tiltX, c.rotY, c.tiltZ);
+    _cd.scale.setScalar(1);
+    _cd.updateMatrix();
+    clipMesh.setMatrixAt(i, _cd.matrix);
+  }
+
+  clipMesh.instanceMatrix.needsUpdate = true;
+  clipBladeGeo.attributes.aClipHeight.needsUpdate = true;
+  clipBladeGeo.attributes.aClipWidth.needsUpdate  = true;
+  clipBladeGeo.attributes.aClipLean.needsUpdate   = true;
+  clipBladeGeo.attributes.aClipAlpha.needsUpdate  = true;
+}
+
 // ── Render loop ─────────────────────────────────────────────────────────────
 function animate() {
   requestAnimationFrame(animate);
@@ -1049,6 +2011,28 @@ function animate() {
   const delta = clock.getDelta();
   const safeDelta = Math.min(delta, 0.05);
   const elapsed = clock.elapsedTime;
+
+  // Performance stats
+  statsFrameCount++;
+  statsFrameTime = delta * 1000;
+  const statsNow = performance.now();
+  if (statsNow - statsLastTime >= 500) {
+    statsFPS = Math.round(statsFrameCount * 1000 / (statsNow - statsLastTime));
+    statsFPSSmooth = statsFPSSmooth * 0.7 + statsFPS * 0.3;
+    statsFrameCount = 0;
+    statsLastTime = statsNow;
+    const ri = renderer.info;
+    document.getElementById('stats-panel').innerHTML =
+      `FPS: <b>${statsFPS}</b> (avg ${Math.round(statsFPSSmooth)})<br>` +
+      `Frame: ${statsFrameTime.toFixed(1)} ms<br>` +
+      `Draw calls: ${ri.render.calls}<br>` +
+      `Triangles: ${(ri.render.triangles/1000).toFixed(0)}k<br>` +
+      `Geometries: ${ri.memory.geometries}<br>` +
+      `Textures: ${ri.memory.textures}<br>` +
+      `Blades near: ${BLADE_NEAR.toLocaleString()}<br>` +
+      `Blades far: ${BLADE_FAR.toLocaleString()}<br>` +
+      `Total: ${(BLADE_NEAR+BLADE_FAR).toLocaleString()}`;
+  }
 
   if (introStartTime === null) introStartTime = elapsed;
   const introElapsed = elapsed - introStartTime;
@@ -1094,26 +2078,111 @@ function animate() {
   currentDirZ += (gust.dirZ - currentDirZ) * dirLerp;
   grassMaterial.uniforms.uGustDirX.value = currentDirX;
   grassMaterial.uniforms.uGustDirZ.value = currentDirZ;
+
+  if (todTransitioning && transitionFrom && transitionTo) {
+    todTransitionT = Math.min(1.0, todTransitionT + safeDelta / TOD_TRANS_DUR);
+    const ease = todTransitionT < 0.5
+      ? 2 * todTransitionT * todTransitionT
+      : 1 - Math.pow(-2 * todTransitionT + 2, 2) / 2;
+
+    const u = grassMaterial.uniforms;
+    u.uBaseColor.value.lerpVectors(transitionFrom.base,      transitionTo.base,      ease);
+    u.uMidColor.value.lerpVectors(transitionFrom.mid,       transitionTo.mid,       ease);
+    u.uTipPale.value.lerpVectors(transitionFrom.tipPale,   transitionTo.tipPale,   ease);
+    u.uTipBright.value.lerpVectors(transitionFrom.tipBright,transitionTo.tipBright,ease);
+    u.uBentBase.value.lerpColors(transitionFrom.bentBase,  transitionTo.bentBase,  ease);
+    u.uBentMid.value.lerpColors(transitionFrom.bentMid,   transitionTo.bentMid,   ease);
+    u.uBentTipLo.value.lerpColors(transitionFrom.bentTipLo,transitionTo.bentTipLo,ease);
+    u.uBentTipHi.value.lerpColors(transitionFrom.bentTipHi,transitionTo.bentTipHi,ease);
+    u.uSpecColor.value.lerpVectors(transitionFrom.spec,    transitionTo.spec,      ease);
+    u.uSunDir.value.lerpVectors(transitionFrom.sunDir,     transitionTo.sunDir,    ease);
+    u.uLightMin.value = transitionFrom.lightMin + (transitionTo.lightMin - transitionFrom.lightMin) * ease;
+    u.uAOMin.value    = transitionFrom.aoMin    + (transitionTo.aoMin    - transitionFrom.aoMin)    * ease;
+
+    const skyNow = new THREE.Color().lerpColors(transitionFrom.sky, transitionTo.sky, ease);
+    renderer.setClearColor(skyNow);
+    groundMesh.material.color.lerpColors(transitionFrom.ground, transitionTo.ground, ease);
+
+    if (todTransitionT >= 1.0) todTransitioning = false;
+  }
+
+  if (isNight) {
+    if (fireflyDelay > 0) {
+      fireflyDelay -= safeDelta;
+    } else {
+      fireflyFadeT = Math.min(1.0, fireflyFadeT + safeDelta / 2.0);
+    }
+  } else {
+    fireflyFadeT = Math.max(0.0, fireflyFadeT - safeDelta / 3.0);
+  }
+  fireflyMaterial.uniforms.uVisible.value = fireflyFadeT;
+
   updateCursorDirection();
   updateTrail();
+  updateMow(safeDelta);
+  if (cutDragGain && audioCtx) {
+    const onGrass = cursorTrailUV.x >= 0 && cursorTrailUV.x <= 1 &&
+                    cursorTrailUV.y >= 0 && cursorTrailUV.y <= 1;
+    let cutTarget = 0;
+    if (!audioMuted && isMouseDown && onGrass) {
+      const speedFactor = Math.pow(Math.min(1, smoothSpeed * 0.6), 0.5);
+      cutTarget = 0.26 * speedFactor;
+    }
+    cutDragGain.gain.setTargetAtTime(cutTarget, audioCtx.currentTime, 0.04);
+  }
   updateAudioFromTrail();
 
-  const cursorOnGrass =
-    cursorTrailUV.x >= 0 && cursorTrailUV.x <= 1 &&
-    cursorTrailUV.y >= 0 && cursorTrailUV.y <= 1;
-  const trailTarget = Math.min(1, smoothVelocity * 0.8) * (cursorOnGrass ? 1 : 0);
-  const tForce = (trailTarget - trailSpring) * TRAIL_STIFFNESS;
-  const tDamp = trailSpringVel * TRAIL_DAMPING;
-  trailSpringVel += (tForce - tDamp) * safeDelta;
-  trailSpring += trailSpringVel * safeDelta;
-  grassMaterial.uniforms.uTrailSpring.value = trailSpring;
+  grassMaterial.uniforms.uTrailSpring.value = 0;
 
-  grass.updateMatrixWorld();
-  grass.material.uniforms.projectionMatrix.value.copy(camera.projectionMatrix);
-  grass.material.uniforms.modelViewMatrix.value.multiplyMatrices(
-    camera.matrixWorldInverse,
-    grass.matrixWorld
+  updateFireflies(
+    safeDelta,
+    elapsed,
+    springPos,
+    currentDirX,
+    currentDirZ,
+    cursorWorldX,
+    cursorWorldZ,
+    smoothVelocity,
+    cursorTrailUV.x >= 0 && cursorTrailUV.x <= 1 &&
+    cursorTrailUV.y >= 0 && cursorTrailUV.y <= 1
   );
+
+  updateClips(safeDelta);
+
+  const ffBrightData = [];
+  for (let i = 0; i < FIREFLY_COUNT; i++) {
+    if (ff[i].brightness > 0.01) {
+      ffBrightData.push({ x: ff[i].x, y: ff[i].y, z: ff[i].z, b: ff[i].brightness });
+    }
+  }
+  ffBrightData.sort((a, b2) => b2.b - a.b);
+  const ffLightPos = new Float32Array(12 * 3);
+  const ffLightBri = new Float32Array(12);
+  for (let i = 0; i < Math.min(12, ffBrightData.length); i++) {
+    ffLightPos[i * 3]     = ffBrightData[i].x;
+    ffLightPos[i * 3 + 1] = ffBrightData[i].y;
+    ffLightPos[i * 3 + 2] = ffBrightData[i].z;
+    ffLightBri[i]         = ffBrightData[i].b * fireflyFadeT;
+  }
+  grassMaterial.uniforms.uFFLightPos.value = ffLightPos;
+  grassMaterial.uniforms.uFFLightBri.value = ffLightBri;
+
+  grassNear.updateMatrixWorld();
+  grassFar.updateMatrixWorld();
+  camera.updateMatrixWorld();
+  const canvasW = window.innerWidth;
+  const canvasH = window.innerHeight;
+  if (canvasW > 0 && canvasH > 0) {
+    const nextAspect = canvasW / canvasH;
+    if (Math.abs(camera.aspect - nextAspect) > 0.001) {
+      camera.aspect = nextAspect;
+      camera.updateProjectionMatrix();
+    }
+  }
+  grassMaterial.uniforms.projectionMatrix.value.copy(camera.projectionMatrix);
+  grassMaterial.uniforms.modelViewMatrix.value.copy(camera.matrixWorldInverse).multiply(grassNear.matrixWorld);
+  clipMat.uniforms.projectionMatrix.value.copy(camera.projectionMatrix);
+  clipMat.uniforms.modelViewMatrix.value.copy(camera.matrixWorldInverse);
   renderer.render(scene, camera);
 }
 
