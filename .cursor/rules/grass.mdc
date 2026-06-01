@@ -1,0 +1,43 @@
+---
+description: Rules for the touch grass / barley field simulation project
+globs: ["*.html", "*.js", "*.md"]
+alwaysApply: false
+---
+
+# Grass simulation — Cursor rules
+
+## Project
+Barley-like tall grass reacting to cursor. **Active build:** `touch_grass_webgl.html` (Three.js instanced blades, gust bands, directional trail, audio). **Reference:** `touch_grass.html` (Canvas 2D physics/awns). Full context in `context.md`.
+
+## Behaviour rules
+- Read the relevant function before touching it. Never rewrite working code to fix an adjacent issue.
+- Smallest possible diff. If a one-line change fixes it, make one line change.
+- Don't auto-agree. If the approach seems wrong, say so before implementing.
+- Ask for a plan on anything that touches more than two functions. Wait for approval before coding.
+- Never remove the `P` object or slider bindings — all parameters must stay live-tunable.
+
+## Architecture constraints
+- Physics lives in `Blade.update()`. Three-angle spring: `baseAngle`/`baseVel` (stiff, anchored), `tipAngle`/`tipVel` (loose, flutters), `awnAngle`/`awnVel` (near-zero stiffness, barely damped). Do not collapse to single- or two-angle.
+- Rendering lives in `Blade.draw()`. Cubic bezier S-curve, perpendicular-based width taper, 3-stop gradient fill on the blade. Do not replace blade body with flat fills.
+- **Awns:** gradient strokes from the blade tip are the primary barley identifier — always preserve them.
+- `mkBlades()` rebuilds the population. Tuft `ry` uses `Math.pow(Math.random(), 0.55)` bottom-bias; spread uses `Math.sqrt(Math.random()) × P.spread`. Triggered by density/spread slider changes (debounced 180ms). Everything else in `P` updates live without rebuild.
+- Background gradient bottom value must match the darkest `cBase` colour — if you change one, change the other (`#0e2008 → #091503 → #040a01`).
+
+## Grass type
+Primary: **barley-like tall grass**. Narrow blades, strong S-curve, silver-white tips, awn seed heads at tip. Do not introduce short lawn grass or mix blade types.
+
+## P defaults (barley)
+```
+density: 2600,  height: 1.4,   width: 0.7,   spread: 0.045
+lean: -0.06,    wStr: 0.248,   wSpd: 0.05,   wTurb: 0.120
+mRad: 60,       mForce: 0.26,  stiff: 0.042, damp: 0.675
+```
+
+## Known bad approaches (do not re-suggest)
+- Shell texturing / dot-pass layers — tried, looked pixelated
+- Solid-fill "base layer" blades without gradients — tried, looked like paint
+- Single `angle` rigid-rod physics — replaced with three-angle system, do not revert
+- Isometric tile projection — removed in favour of full-screen Y-depth, do not reintroduce
+
+## Performance ceiling
+Canvas 2D hard limit ~4000 blades. Migration to Three.js InstancedMesh is planned after physics/visuals are finalised. Do not try to solve density with Canvas 2D hacks.

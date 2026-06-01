@@ -11,130 +11,221 @@ canvas {
   display: block;
   position: fixed;
   inset: 0;
-  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cg fill='none' stroke='white' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 20 C8 26 12 30 16 30 C20 30 24 26 24 20 L24 16' fill='rgba(255,255,255,0.15)' stroke='white'/%3E%3Cline x1='16' y1='16' x2='16' y2='6'/%3E%3Cellipse cx='16' cy='5.5' rx='1.5' ry='1.5'/%3E%3Cline x1='19.5' y1='16.5' x2='19.5' y2='5.5'/%3E%3Cellipse cx='19.5' cy='5' rx='1.5' ry='1.5'/%3E%3Cline x1='23' y1='17' x2='23' y2='7'/%3E%3Cellipse cx='23' cy='6.5' rx='1.5' ry='1.5'/%3E%3Cline x1='26' y1='18' x2='26' y2='10'/%3E%3Cellipse cx='26' cy='9.5' rx='1.5' ry='1.5'/%3E%3Cpath d='M8 20 C8 18 6 16 7 14 C8 12 10 13 10 16'/%3E%3C/g%3E%3C/svg%3E") 12 4, default;
+  cursor: url('assets/Hand32.svg') 12 4, auto;
 }
 
-#ui-panels {
-  position: fixed;
-  top: 0; left: 0;
-  width: 220px;
-  z-index: 10;
-  font-family: system-ui, sans-serif;
-}
-#wind-panel, #interaction-panel {
-  background: rgba(4, 10, 2, 0.78);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-right: 1px solid rgba(255,255,255,0.07);
-  border-bottom: 1px solid rgba(255,255,255,0.07);
-}
-#wind-panel-toggle, #interaction-panel-toggle {
-  display: block;
-  width: 100%;
-  padding: 10px 16px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-family: system-ui, sans-serif;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-align: left;
-  color: rgba(255,255,255,0.45);
-}
-#wind-panel-toggle:hover, #interaction-panel-toggle:hover { color: rgba(255,255,255,0.7); }
-#wind-panel-body, #interaction-panel-body {
-  padding: 0 16px 16px;
-}
-#wind-panel.collapsed #wind-panel-body,
-#interaction-panel.collapsed #interaction-panel-body {
+#fps-dev {
   display: none;
-}
-.ctrl { margin-bottom: 9px; }
-.ctrl:last-child { margin-bottom: 0; }
-.ctrl-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 3px;
-}
-.ctrl-label {
-  font-size: 11px;
-  color: rgba(255,255,255,0.55);
-}
-.ctrl-val {
-  font-size: 10px;
-  font-family: 'Courier New', monospace;
-  color: rgba(255,255,255,0.85);
-  min-width: 36px;
-  text-align: right;
-}
-#ui-panels input[type=range] {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 2px;
-  background: rgba(255,255,255,0.14);
-  border-radius: 2px;
-  outline: none;
-  cursor: pointer;
-}
-#ui-panels input[type=range]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 12px; height: 12px;
-  border-radius: 50%;
-  background: #5aaa28;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.5);
-}
-#ui-panels input[type=range]::-moz-range-thumb {
-  width: 12px; height: 12px;
-  border-radius: 50%;
-  background: #5aaa28;
-  border: none;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 200;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: #ffffff;
+  pointer-events: none;
 }
 
-#night-btn, #mute-btn {
+.ui-btn {
   position: fixed;
-  right: 12px;
-  padding: 8px 14px;
-  border: 1px solid rgba(255,255,255,0.07);
-  border-radius: 2px;
-  background: rgba(4, 10, 2, 0.78);
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.55);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  font-family: system-ui, sans-serif;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  color: rgba(255,255,255,0.45);
+  color: rgba(0,0,0,0.75);
+  border: 1px solid rgba(255,255,255,0.30);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35),
+              0 3px 8px rgba(0,0,0,0.22),
+              0 1px 2px rgba(0,0,0,0.15);
   cursor: pointer;
-  z-index: 10;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 2s ease, border-color 2s ease,
+              box-shadow 2s ease, color 2s ease,
+              transform 0.15s;
+  z-index: 100;
 }
-#night-btn { bottom: 48px; }
-#mute-btn {
-  bottom: 12px;
+.ui-btn:hover {
+  background: rgba(255,255,255,0.70);
+  transform: scale(1.06);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.40),
+              0 4px 10px rgba(0,0,0,0.25),
+              0 1px 3px rgba(0,0,0,0.18);
 }
-#night-btn:hover, #mute-btn:hover { color: rgba(255,255,255,0.7); }
+.ui-btn.night {
+  background: rgba(28, 42, 68, 0.90);
+  border: 1px solid rgba(140, 170, 220, 0.30);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.65),
+              0 3px 10px rgba(0,0,0,0.45),
+              0 0 0 1px rgba(100,140,200,0.12),
+              0 1px 2px rgba(0,0,0,0.35);
+  color: rgba(200, 220, 255, 0.92);
+  transition: background 2s ease, border-color 2s ease,
+              box-shadow 2s ease, color 2s ease,
+              transform 0.15s;
+}
+.ui-btn.night:hover {
+  background: rgba(40, 60, 95, 0.95);
+  border-color: rgba(160, 190, 240, 0.45);
+  box-shadow: 0 12px 36px rgba(0,0,0,0.72),
+              0 4px 14px rgba(0,0,0,0.50),
+              0 0 0 1px rgba(140,170,240,0.18),
+              0 1px 3px rgba(0,0,0,0.40);
+}
+.ui-btn svg { width: 18px; height: 18px; pointer-events: none; }
 
-#fullscreen-btn {
+#btn-info  { bottom: 20px; left: 20px; }
+#btn-tod   { bottom: 20px; right: 20px; }
+
+#info-card {
   position: fixed;
-  bottom: 84px;
-  right: 12px;
-  padding: 8px 12px;
-  border: 1px solid rgba(255,255,255,0.07);
-  border-radius: 2px;
-  background: rgba(4, 10, 2, 0.78);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  font-family: system-ui, sans-serif;
+  bottom: 70px; left: 20px;
+  background: rgba(255,255,255,0.55);
+  color: rgba(0,0,0,0.82);
+  border-radius: 12px;
+  padding: 18px 18px 18px 16px;
+  max-width: 300px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 14px;
-  line-height: 1;
-  color: rgba(255,255,255,0.45);
-  cursor: pointer;
-  z-index: 10;
+  line-height: 17px;
+  flex-direction: column;
+  gap: 11px;
+  border: 1px solid rgba(255,255,255,0.30);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.30),
+              0 6px 16px rgba(0,0,0,0.18),
+              0 2px 4px rgba(0,0,0,0.12);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 101;
+  transition: background 2s ease, border-color 2s ease,
+              box-shadow 2s ease, color 2s ease;
+  display: none;
+  transform-origin: bottom left;
 }
-#fullscreen-btn:hover { color: rgba(255,255,255,0.7); }
+#info-card.night {
+  background: rgba(28, 42, 68, 0.90);
+  color: rgba(200, 220, 255, 0.92);
+  border: 1px solid rgba(140, 170, 220, 0.30);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.70),
+              0 6px 18px rgba(0,0,0,0.50),
+              0 0 0 1px rgba(100,140,200,0.12),
+              0 2px 4px rgba(0,0,0,0.35);
+}
+#info-card.night .info-divider {
+  border-top-color: rgba(140, 170, 220, 0.20);
+}
+#info-card.night a {
+  color: rgba(180, 210, 255, 0.90);
+}
+#info-card.night .info-title {
+  color: rgba(220, 235, 255, 0.95);
+}
+#info-card.visible,
+#info-card.opening,
+#info-card.closing { display: flex; }
+#info-card.visible:not(.opening):not(.closing) {
+  opacity: 1;
+  transform: none;
+  border-radius: 12px;
+}
+#info-card.opening {
+  animation: cardMorphIn 0.26s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+#info-card.closing {
+  animation: cardMorphOut 0.2s cubic-bezier(0.4, 0, 0.6, 1) forwards;
+  pointer-events: none;
+}
+@keyframes cardMorphIn {
+  from {
+    opacity: 0;
+    transform: scale(0.65) translateY(12px);
+    border-radius: 24px;
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    border-radius: 12px;
+  }
+}
+@keyframes cardMorphOut {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    border-radius: 12px;
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.65) translateY(12px);
+    border-radius: 24px;
+  }
+}
+#info-card p { margin: 0 0 10px; }
+#info-card p:last-child { margin: 0; }
+#info-card a { color: #111; }
+.info-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 16px; font-weight: 600; margin-bottom: 12px;
+}
+.info-title svg { width: 20px; height: 20px; flex-shrink: 0; }
+.info-divider { border: none; border-top: 1px solid #eee; margin: 12px 0; }
+
+#loading-overlay {
+  position: fixed; inset: 0; z-index: 999;
+  background: #0d1a09;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.8s ease;
+  pointer-events: none;
+}
+#loading-overlay.hidden { opacity: 0; }
+
+#loading-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 32px;
+}
+
+#loading-audio-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.35;
+  color: #ffffff;
+  letter-spacing: 0.01em;
+  text-align: center;
+}
+#loading-audio-hint svg {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  color: #ffffff;
+}
+
+#loading-bar-track {
+  width: 320px; height: 2px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+#loading-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: #ffffff;
+  border-radius: 2px;
+  animation: barFill 1s linear forwards;
+}
+
+@keyframes barFill {
+  from { width: 0%; }
+  to   { width: 100%; }
+}
 </style>
 <script type="importmap">
 {
@@ -146,72 +237,58 @@ canvas {
 </head>
 <body>
 
-<div id="ui-panels">
-<div id="wind-panel" class="collapsed">
-  <button type="button" id="wind-panel-toggle">WIND ▸</button>
-  <div id="wind-panel-body">
-  <div class="ctrl">
-    <div class="ctrl-top"><span class="ctrl-label">Wind Speed</span><span class="ctrl-val" id="v-w-spd">0.75</span></div>
-    <input type="range" id="s-w-spd" min="0" max="3" value="0.75" step="0.05">
-  </div>
-  <div class="ctrl">
-    <div class="ctrl-top"><span class="ctrl-label">Wind Strength</span><span class="ctrl-val" id="v-w-str">0.80</span></div>
-    <input type="range" id="s-w-str" min="0" max="3" value="0.8" step="0.05">
-  </div>
-  <div class="ctrl">
-    <div class="ctrl-top"><span class="ctrl-label">Turbulence</span><span class="ctrl-val" id="v-w-turb">0.30</span></div>
-    <input type="range" id="s-w-turb" min="0" max="1" value="0.3" step="0.02">
-  </div>
-  <div class="ctrl">
-    <div class="ctrl-top"><span class="ctrl-label">Direction (X phase)</span><span class="ctrl-val" id="v-w-dir">0.125</span></div>
-    <input type="range" id="s-w-dir" min="0" max="1" value="0.125" step="0.005">
-  </div>
-  </div>
-</div>
+<div id="fps-dev"></div>
 
-<div id="interaction-panel" class="collapsed">
-  <button type="button" id="interaction-panel-toggle">INTERACTION ▸</button>
-  <div id="interaction-panel-body">
-  <div class="ctrl">
-    <div class="ctrl-top"><span class="ctrl-label">Brush Size</span><span class="ctrl-val" id="v-i-brush">0.010</span></div>
-    <input type="range" id="s-i-brush" min="0.002" max="0.05" value="0.01" step="0.001">
-  </div>
-  <div class="ctrl">
-    <div class="ctrl-top"><span class="ctrl-label">Brush Strength</span><span class="ctrl-val" id="v-i-str">0.85</span></div>
-    <input type="range" id="s-i-str" min="0" max="3" value="0.85" step="0.05">
-  </div>
-  <div class="ctrl">
-    <div class="ctrl-top"><span class="ctrl-label">Trail Fade</span><span class="ctrl-val" id="v-i-fade">0.996</span></div>
-    <input type="range" id="s-i-fade" min="0.95" max="0.998" value="0.996" step="0.005">
-  </div>
-  <div class="ctrl">
-    <div class="ctrl-top"><span class="ctrl-label">Displacement X</span><span class="ctrl-val" id="v-i-dx">0.8</span></div>
-    <input type="range" id="s-i-dx" min="0" max="4" value="0.8" step="0.1">
-  </div>
-  <div class="ctrl">
-    <div class="ctrl-top"><span class="ctrl-label">Displacement Z</span><span class="ctrl-val" id="v-i-dz">0.8</span></div>
-    <input type="range" id="s-i-dz" min="0" max="4" value="0.8" step="0.1">
-  </div>
-  </div>
-</div>
-</div>
+<!-- Info button -->
+<button class="ui-btn" id="btn-info" aria-label="Information">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <path d="M12 16v-4"/><path d="M12 8h.01"/>
+  </svg>
+</button>
 
-<button type="button" id="fullscreen-btn" title="Fullscreen">⤢</button>
-<div id="stats-panel" style="
-  position: fixed; bottom: 120px; right: 12px;
-  background: rgba(0,0,0,0.75); color: #8fc; font-family: monospace;
-  font-size: 10px; padding: 8px 10px; line-height: 1.8;
-  border: 1px solid #2a4a2a; z-index: 20; min-width: 180px;
-"></div>
-<button type="button" id="night-btn">NIGHT</button>
-<button type="button" id="mute-btn">MUTE</button>
+<!-- Day/Night toggle -->
+<button class="ui-btn" id="btn-tod" aria-label="Toggle day/night">
+  <svg id="icon-sun" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="4"/>
+    <path d="M12 2v2"/><path d="M12 20v2"/>
+    <path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/>
+    <path d="M2 12h2"/><path d="M20 12h2"/>
+    <path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>
+  </svg>
+  <svg id="icon-moon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+    style="display:none">
+    <path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/>
+  </svg>
+</button>
+
+<!-- Info card -->
+<div id="info-card">
+  <p><strong>Touch Grass</strong><br>
+     Created by <a href="https://shrumezuo.com" target="_blank">Shrume Zuo</a></p>
+  <p>Hover to touch grass<br>
+     LMB click to cut grass</p>
+  <p>Ambient sound by:<br>
+     <a href="https://pixabay.com/users/capaholiczsfx-52209270/?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=446356" target="_blank">Justyn Britton</a> &amp;<br>
+     <a href="https://pixabay.com/users/freesound_community-46691455/?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=17064" target="_blank">freesound_community</a></p>
+</div>
 
 <script type="module">
 import * as THREE from 'three';
 
-const BLADE_NEAR  = 260000;
-const BLADE_FAR   = 140000;
-const BLADE_COUNT = BLADE_NEAR + BLADE_FAR;
+const devMode = window.location.search.includes('dev');
+const fpsEl = document.getElementById('fps-dev');
+if (fpsEl) fpsEl.style.display = devMode ? 'block' : 'none';
+let fpsFrames = 0;
+let fpsIntervalStart = performance.now();
+
+const BLADE_NEAR      = 260000;
+const BLADE_FAR       = 180000;
+const BLADE_VERY_FAR  = 90000;
+const BLADE_COUNT     = BLADE_NEAR + BLADE_FAR;
 
 let fieldMinX, fieldMaxX, fieldMinZ, fieldMaxZ;
 
@@ -283,7 +360,7 @@ const trailMaterial = new THREE.ShaderMaterial({
     uCursorSpeed:   { value: 0 },
     uPrevTrail:     { value: trailRead.texture },
     uFade:          { value: 0.996 },
-    uBrushSize:     { value: 0.01 },
+    uBrushSize:     { value: 0.007 },
     uBrushStrength: { value: 0.85 },
     uFieldAspect:   { value: 1.0 },
   },
@@ -309,15 +386,25 @@ let mowWrite = mowRTB;
 const mowFragShader = /* glsl */`
 uniform sampler2D uPrevMow;
 uniform vec2 uMouse;
+uniform vec2 uMousePrev;
 uniform float uBrushSize;
 uniform float uCutMode;
 uniform float uFieldAspect;
 varying vec2 vUv;
 void main() {
   float prev = texture2D(uPrevMow, vUv).r;
-  vec2 mowDelta = vUv - uMouse;
-  mowDelta.x *= uFieldAspect;
-  float dist = length(mowDelta);
+  vec2 pa = vUv - uMousePrev;
+  pa.x *= uFieldAspect;
+  vec2 ba = uMouse - uMousePrev;
+  ba.x *= uFieldAspect;
+  float baLen2 = dot(ba, ba);
+  float dist;
+  if (baLen2 < 0.00001) {
+    dist = length(pa);
+  } else {
+    float h = clamp(dot(pa, ba) / baLen2, 0.0, 1.0);
+    dist = length(pa - ba * h);
+  }
   float brush = uCutMode > 0.5
     ? step(dist, uBrushSize * 0.6)
     : 0.0;
@@ -332,7 +419,8 @@ const mowMaterial = new THREE.ShaderMaterial({
   uniforms: {
     uPrevMow:    { value: mowRead.texture },
     uMouse:      { value: new THREE.Vector2(-10, -10) },
-    uBrushSize:  { value: 0.01 },
+    uMousePrev:  { value: new THREE.Vector2(-10, -10) },
+    uBrushSize:  { value: 0.007 },
     uCutMode:    { value: 0.0 },
     uFieldAspect: { value: 1.0 },
   },
@@ -345,6 +433,13 @@ const mowMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mowMaterial);
 mowScene.add(mowMesh);
 
 let isMouseDown = false;
+let isTouchMowing = false;
+let touch0PrevX = 0;
+let touch0PrevY = 0;
+let touch1PrevX = 0;
+let touch1PrevY = 0;
+let touch0HasPrev = false;
+let touch1HasPrev = false;
 
 const MOW_CELLS_X = 48;
 const MOW_CELLS_Z = 48;
@@ -368,26 +463,78 @@ function mowCellMark(wx, wz) {
   mowCells[mowCellIdx(wx, wz)] = mowElapsed;
 }
 
-function updateMow(safeDelta) {
-  mowElapsed += safeDelta;
-  mowMaterial.uniforms.uBrushSize.value = trailMaterial.uniforms.uBrushSize.value;
-  mowMaterial.uniforms.uPrevMow.value = mowRead.texture;
-  mowMaterial.uniforms.uMouse.value.set(cursorTrailUV.x, cursorTrailUV.y);
-  mowMaterial.uniforms.uCutMode.value = isMouseDown ? 1.0 : 0.0;
-  if (isMouseDown && cursorTrailUV.x >= 0 && cursorTrailUV.x <= 1
-                  && cursorTrailUV.y >= 0 && cursorTrailUV.y <= 1) {
-    const alreadyCut = mowCellCut(cursorWorldX, cursorWorldZ);
-    mowCellMark(cursorWorldX, cursorWorldZ);
-    if (!alreadyCut) {
-      spawnClips(cursorWorldX, cursorWorldZ, 1.0);
-      fireCutSnip();
-    }
+function applyMowAtPoint(worldX, worldZ) {
+  const u = (worldX - fieldMinX) / (fieldMaxX - fieldMinX);
+  const v = (worldZ - fieldMinZ) / (fieldMaxZ - fieldMinZ);
+  if (u < 0 || u > 1 || v < 0 || v > 1) return;
+  const alreadyCut = mowCellCut(worldX, worldZ);
+  mowCellMark(worldX, worldZ);
+  if (!alreadyCut) {
+    spawnClips(worldX, worldZ, 1.0);
+    fireCutSnip();
   }
+}
+
+function swapMowRT() {
+  const tmp = mowRead;
+  mowRead = mowWrite;
+  mowWrite = tmp;
+  grassMaterial.uniforms.uMowMap.value = mowRead.texture;
+}
+
+function renderMowPass(endU, endV, startU, startV, cutMode) {
+  mowMaterial.uniforms.uPrevMow.value = mowRead.texture;
+  mowMaterial.uniforms.uMouse.value.set(endU, endV);
+  mowMaterial.uniforms.uMousePrev.value.set(startU, startV);
+  mowMaterial.uniforms.uCutMode.value = cutMode ? 1.0 : 0.0;
   renderer.setRenderTarget(mowWrite);
   renderer.render(mowScene, trailCamera);
   renderer.setRenderTarget(null);
-  const tmp = mowRead; mowRead = mowWrite; mowWrite = tmp;
-  grassMaterial.uniforms.uMowMap.value = mowRead.texture;
+  swapMowRT();
+}
+
+function updateMow(safeDelta) {
+  mowElapsed += safeDelta;
+  mowMaterial.uniforms.uBrushSize.value = trailMaterial.uniforms.uBrushSize.value;
+  const cutting = isMouseDown || isTouchMowing;
+  const onGrass =
+    cursorTrailUV.x >= 0 && cursorTrailUV.x <= 1 &&
+    cursorTrailUV.y >= 0 && cursorTrailUV.y <= 1;
+
+  if (cutting && onGrass) {
+    const endU = cursorTrailUV.x;
+    const endV = cursorTrailUV.y;
+    const startU = prevMowUV.x;
+    const startV = prevMowUV.y;
+    const aspect = mowMaterial.uniforms.uFieldAspect.value;
+    const du = (endU - startU) * aspect;
+    const dv = endV - startV;
+    const dist = Math.hypot(du, dv);
+    const brush = mowMaterial.uniforms.uBrushSize.value;
+    const stepLen = brush * 0.25;
+    const steps = Math.min(48, Math.max(1, Math.ceil(dist / stepLen)));
+
+    for (let i = 1; i <= steps; i++) {
+      const t0 = (i - 1) / steps;
+      const t1 = i / steps;
+      renderMowPass(
+        startU + (endU - startU) * t1,
+        startV + (endV - startV) * t1,
+        startU + (endU - startU) * t0,
+        startV + (endV - startV) * t0,
+        true
+      );
+    }
+    applyMowAtPoint(cursorWorldX, cursorWorldZ);
+    prevMowUV.set(endU, endV);
+  } else {
+    renderMowPass(
+      cursorTrailUV.x, cursorTrailUV.y,
+      prevMowUV.x, prevMowUV.y,
+      false
+    );
+    if (onGrass) prevMowUV.set(cursorTrailUV.x, cursorTrailUV.y);
+  }
 }
 
 // ── Gust state machine ────────────────────────────────────────────────────────
@@ -476,6 +623,7 @@ const raycaster = new THREE.Raycaster();
 const mouseNdc = new THREE.Vector2();
 const hitPoint = new THREE.Vector3();
 const cursorTrailUV = { x: -10, y: -10 };
+const prevMowUV = new THREE.Vector2(-10, -10);
 let mouseScreenX = 0;
 let mouseScreenY = 0;
 
@@ -743,6 +891,16 @@ function updateCursorDirection() {
   grassMaterial.uniforms.uCursorSpeed.value = cursorSpeed;
 }
 
+function clearCursorTrail() {
+  trailMaterial.uniforms.uMouse.value.set(-10, -10);
+  cursorTrailUV.x = -10;
+  cursorTrailUV.y = -10;
+  cursorWorldX = 0;
+  cursorWorldZ = -50;
+  prevCursorWorldX = 0;
+  prevCursorWorldZ = -50;
+}
+
 function updateMouseFromEvent(clientX, clientY) {
   tryInitAudio();
   const rect = renderer.domElement.getBoundingClientRect();
@@ -757,6 +915,99 @@ function updateMouseFromEvent(clientX, clientY) {
     cursorTrailUV.x = (hitPoint.x - fieldMinX) / (fieldMaxX - fieldMinX);
     cursorTrailUV.y = (hitPoint.z - fieldMinZ) / (fieldMaxZ - fieldMinZ);
     trailMaterial.uniforms.uMouse.value.set(cursorTrailUV.x, cursorTrailUV.y);
+  }
+}
+
+function seedPointerVelocity(clientX, clientY) {
+  lastMouseX = clientX;
+  lastMouseY = clientY;
+}
+
+function twoFingerSameDirection(t0, t1) {
+  if (!touch0HasPrev || !touch1HasPrev) return false;
+  const v0x = t0.clientX - touch0PrevX;
+  const v0y = t0.clientY - touch0PrevY;
+  const v1x = t1.clientX - touch1PrevX;
+  const v1y = t1.clientY - touch1PrevY;
+  const v0mag = Math.hypot(v0x, v0y);
+  const v1mag = Math.hypot(v1x, v1y);
+  if (v0mag < 0.5 || v1mag < 0.5) return false;
+  return v0x * v1x + v0y * v1y > 0;
+}
+
+function storeTouchFingerPrev(t0, t1) {
+  touch0PrevX = t0.clientX;
+  touch0PrevY = t0.clientY;
+  touch1PrevX = t1.clientX;
+  touch1PrevY = t1.clientY;
+  touch0HasPrev = true;
+  touch1HasPrev = true;
+}
+
+function handleTouchStart(e) {
+  e.preventDefault();
+  tryInitAudio();
+  if (e.touches.length === 1) {
+    isTouchMowing = false;
+    touch0HasPrev = false;
+    touch1HasPrev = false;
+    const t = e.touches[0];
+    seedPointerVelocity(t.clientX, t.clientY);
+    updateMouseFromEvent(t.clientX, t.clientY);
+  } else if (e.touches.length === 2) {
+    isTouchMowing = false;
+    const t0 = e.touches[0];
+    const t1 = e.touches[1];
+    storeTouchFingerPrev(t0, t1);
+    const midX = (t0.clientX + t1.clientX) * 0.5;
+    const midY = (t0.clientY + t1.clientY) * 0.5;
+    seedPointerVelocity(midX, midY);
+    updateMouseFromEvent(midX, midY);
+    prevMowUV.set(cursorTrailUV.x, cursorTrailUV.y);
+  }
+}
+
+function handleTouchMove(e) {
+  e.preventDefault();
+  if (e.touches.length === 1) {
+    isTouchMowing = false;
+    const t = e.touches[0];
+    updateMouseFromEvent(t.clientX, t.clientY);
+  } else if (e.touches.length === 2) {
+    const t0 = e.touches[0];
+    const t1 = e.touches[1];
+    const sameDir = twoFingerSameDirection(t0, t1);
+    const wasTouchMowing = isTouchMowing;
+    isTouchMowing = sameDir;
+    const midX = (t0.clientX + t1.clientX) * 0.5;
+    const midY = (t0.clientY + t1.clientY) * 0.5;
+    if (sameDir) {
+      updateMouseFromEvent(midX, midY);
+      if (!wasTouchMowing) prevMowUV.set(cursorTrailUV.x, cursorTrailUV.y);
+    }
+    storeTouchFingerPrev(t0, t1);
+  }
+}
+
+function handleTouchEnd(e) {
+  e.preventDefault();
+  if (e.touches.length === 0) {
+    isTouchMowing = false;
+    touch0HasPrev = false;
+    touch1HasPrev = false;
+    clearCursorTrail();
+  } else if (e.touches.length === 1) {
+    isTouchMowing = false;
+    touch0HasPrev = false;
+    touch1HasPrev = false;
+    const t = e.touches[0];
+    seedPointerVelocity(t.clientX, t.clientY);
+    updateMouseFromEvent(t.clientX, t.clientY);
+  } else if (e.touches.length === 2) {
+    isTouchMowing = false;
+    const t0 = e.touches[0];
+    const t1 = e.touches[1];
+    storeTouchFingerPrev(t0, t1);
   }
 }
 
@@ -792,11 +1043,19 @@ function updateAudioFromTrail() {
   const cursorDepth = Math.max(0, Math.min(1, cursorTrailUV.y));
   const distanceFade = 0.15 + 0.85 * cursorDepth;
 
-  const g1 = cursorActivity * 0.40 * distanceFade;
-  const g2 = cursorActivity * 0.18 * distanceFade;
-  gain1.gain.value = audioMuted ? 0 : g1;
-  gain2.gain.value = audioMuted ? 0 : g2;
-  bandpass.frequency.value = 2000 + cursorActivity * 2500;
+  const overCut = onGrass && mowCellCut(cursorWorldX, cursorWorldZ);
+  const g1Base  = overCut ? 0.36 : 0.40;
+  const g2Base  = overCut ? 0.027 : 0.18;
+  const g1 = cursorActivity * g1Base * distanceFade;
+  const g2 = cursorActivity * g2Base * distanceFade;
+  gain1.gain.setTargetAtTime(audioMuted ? 0 : g1, audioCtx.currentTime, 0.10);
+  gain2.gain.setTargetAtTime(audioMuted ? 0 : g2, audioCtx.currentTime, 0.10);
+  const bpBase = overCut ? 4200 : 2000;
+  const bpRange = overCut ? 1800 : 2500;
+  bandpass.frequency.setTargetAtTime(
+    bpBase + cursorActivity * bpRange, audioCtx.currentTime, 0.12);
+  bandpass.Q.setTargetAtTime(
+    overCut ? 1.8 : 1.2, audioCtx.currentTime, 0.12);
   panner.pan.value = Math.max(-1, Math.min(1, (mouseScreenX / window.innerWidth) * 2 - 1));
 
   const gustAudioStrength = gust.strength;
@@ -825,27 +1084,29 @@ function updateAudioFromTrail() {
 renderer.domElement.addEventListener('mousemove', e => {
   updateMouseFromEvent(e.clientX, e.clientY);
 });
-renderer.domElement.addEventListener('mousedown', () => {
+renderer.domElement.addEventListener('mousedown', (e) => {
   tryInitAudio();
+  updateMouseFromEvent(e.clientX, e.clientY);
   isMouseDown = true;
-  renderer.domElement.style.cursor = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cg stroke='white' stroke-width='1.8' stroke-linecap='round' fill='none'%3E%3Ccircle cx='8' cy='24' r='3'/%3E%3Ccircle cx='8' cy='8' r='3'/%3E%3Cline x1='10.1' y1='21.9' x2='26' y2='6'/%3E%3Cline x1='10.1' y1='10.1' x2='26' y2='26'/%3E%3C/g%3E%3C/svg%3E\") 16 16, crosshair";
+  prevMowUV.set(cursorTrailUV.x, cursorTrailUV.y);
+  renderer.domElement.style.cursor = "url('assets/Sci32.svg') 16 16, crosshair";
 });
 renderer.domElement.addEventListener('mouseup', () => {
   isMouseDown = false;
-  renderer.domElement.style.cursor = 'default';
+  renderer.domElement.style.cursor = "url('assets/Hand32.svg') 12 4, auto";
 });
 renderer.domElement.addEventListener('click', () => tryInitAudio());
 renderer.domElement.addEventListener('mouseleave', () => {
   isMouseDown = false;
-  renderer.domElement.style.cursor = 'default';
-  trailMaterial.uniforms.uMouse.value.set(-10, -10);
-  cursorTrailUV.x = -10;
-  cursorTrailUV.y = -10;
-  cursorWorldX = 0;
-  cursorWorldZ = -50;
-  prevCursorWorldX = 0;
-  prevCursorWorldZ = -50;
+  renderer.domElement.style.cursor = "url('assets/Hand32.svg') 12 4, auto";
+  clearCursorTrail();
 });
+
+const touchOpts = { passive: false };
+renderer.domElement.addEventListener('touchstart', handleTouchStart, touchOpts);
+renderer.domElement.addEventListener('touchmove', handleTouchMove, touchOpts);
+renderer.domElement.addEventListener('touchend', handleTouchEnd, touchOpts);
+renderer.domElement.addEventListener('touchcancel', handleTouchEnd, touchOpts);
 
 function updateTrail() {
   trailMaterial.uniforms.uPrevTrail.value = trailRead.texture;
@@ -869,40 +1130,37 @@ const CAM_LOOK_Z = -29;
 const CAM_INTRO_START_FOV = 43;
 const CAM_INTRO_END_FOV = 35;
 const FIELD_MARGIN = 0.30;
+const FIELD_REFERENCE_ASPECT = 16 / 9;
 
-function computeFieldBounds(aspect) {
-  function sampleVisible(cy, cz, fov) {
-    const boundsCam = new THREE.PerspectiveCamera(fov, aspect, 0.1, 200);
-    boundsCam.position.set(0, cy, cz);
-    boundsCam.lookAt(0, CAM_LOOK_Y, CAM_LOOK_Z);
-    boundsCam.updateProjectionMatrix();
-    boundsCam.updateMatrixWorld(true);
+function computeFieldBounds() {
+  const boundsCam = new THREE.PerspectiveCamera(
+    CAM_INTRO_END_FOV, FIELD_REFERENCE_ASPECT, 0.1, 200
+  );
+  boundsCam.position.set(0, CAM_INTRO_END_Y, CAM_INTRO_END_Z);
+  boundsCam.lookAt(0, CAM_LOOK_Y, CAM_LOOK_Z);
+  boundsCam.updateProjectionMatrix();
+  boundsCam.updateMatrixWorld(true);
 
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-    const raycaster = new THREE.Raycaster();
-    const hits = [];
+  const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  const boundsRaycaster = new THREE.Raycaster();
+  const hits = [];
 
-    for (let xi = -1; xi <= 1; xi++) {
-      for (let yi = -1; yi <= 1; yi++) {
-        raycaster.setFromCamera(new THREE.Vector2(xi, yi), boundsCam);
-        if (raycaster.ray.direction.y >= -0.001) continue;
-        const pt = new THREE.Vector3();
-        if (!raycaster.ray.intersectPlane(plane, pt)) continue;
-        hits.push(pt);
-      }
+  for (let xi = -1; xi <= 1; xi++) {
+    for (let yi = -1; yi <= 1; yi++) {
+      boundsRaycaster.setFromCamera(new THREE.Vector2(xi, yi), boundsCam);
+      if (boundsRaycaster.ray.direction.y >= -0.001) continue;
+      const pt = new THREE.Vector3();
+      if (!boundsRaycaster.ray.intersectPlane(plane, pt)) continue;
+      hits.push(pt);
     }
-
-    const xs = hits.map(p => p.x);
-    const zs = hits.map(p => p.z);
-    return { minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs) };
   }
 
-  const start = sampleVisible(CAM_INTRO_START_Y, CAM_INTRO_START_Z, CAM_INTRO_START_FOV);
-  const end   = sampleVisible(CAM_INTRO_END_Y, CAM_INTRO_END_Z, CAM_INTRO_END_FOV);
-  const minX = Math.min(start.minX, end.minX);
-  const maxX = Math.max(start.maxX, end.maxX);
-  const minZ = Math.min(start.minZ, end.minZ);
-  const maxZ = Math.max(start.maxZ, end.maxZ);
+  const xs = hits.map(p => p.x);
+  const zs = hits.map(p => p.z);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minZ = Math.min(...zs);
+  const maxZ = Math.max(...zs);
   const visW = maxX - minX;
   const visD = maxZ - minZ;
   fieldMinX = minX - visW * FIELD_MARGIN;
@@ -1098,6 +1356,8 @@ uniform vec3 uBentBase;
 uniform vec3 uBentMid;
 uniform vec3 uBentTipLo;
 uniform vec3 uBentTipHi;
+uniform float uFieldMinZ;
+uniform float uFieldMaxZ;
 uniform vec3 uFFLightPos[12];
 uniform float uFFLightBri[12];
 varying vec2 vUv;
@@ -1141,6 +1401,10 @@ void main() {
   specular *= 1.0 - cursorBendAmt * 0.9;
   col += uSpecColor * specular;
 
+  float depthT = clamp((vWorldPos.z - uFieldMinZ) / (uFieldMaxZ - uFieldMinZ), 0.0, 1.0);
+  vec3 hazeColor = vec3(0.13, 0.22, 0.09);
+  col = mix(hazeColor, col, 0.55 + depthT * 0.45);
+
   float ffLight = 0.0;
   for (int i = 0; i < 12; i++) {
     if (uFFLightBri[i] < 0.01) continue;
@@ -1152,15 +1416,11 @@ void main() {
   col += vec3(0.45, 0.72, 0.15) * ffLight;
 
   if (vMow > 0.5) {
+    float nightCut = smoothstep(0.52, 0.34, uLightMin);
+    col *= mix(1.0, 1.12, nightCut);
     float atTop = smoothstep(uCutHeight * 0.85, uCutHeight, vUv.y * vBladeHeight);
-    col = mix(col, col * 1.35, atTop * 0.6);
+    col = mix(col, col * mix(1.35, 1.48, nightCut), atTop * 0.6);
   }
-
-  vec2 screenPos = gl_FragCoord.xy;
-  float grainTime = floor(uTime * 24.0);
-  float hash = fract(sin(dot(screenPos + grainTime, vec2(127.1, 311.7))) * 43758.5453);
-  float grain = (hash - 0.5) * 0.09;
-  col = clamp(col + vec3(grain), 0.0, 1.0);
 
   gl_FragColor = vec4(col, 1.0);
 }
@@ -1215,8 +1475,11 @@ const grassMaterial = new THREE.ShaderMaterial({
   },
 });
 
-computeFieldBounds(Math.min(16 / 9, camera.aspect));
-console.log('Field bounds:', fieldMinX, fieldMaxX, fieldMinZ, fieldMaxZ);
+computeFieldBounds();
+console.log(
+  'Field bounds (fixed, aspect', FIELD_REFERENCE_ASPECT.toFixed(3) + '):',
+  fieldMinX, fieldMaxX, fieldMinZ, fieldMaxZ
+);
 
 const fieldAspect = (fieldMaxZ - fieldMinZ) / (fieldMaxX - fieldMinX);
 trailMaterial.uniforms.uFieldAspect.value = fieldAspect;
@@ -1231,6 +1494,8 @@ const bladeGeoNear = new THREE.PlaneGeometry(1, 1, 1, 3);
 bladeGeoNear.translate(0, 0.5, 0);
 const bladeGeoFar = new THREE.PlaneGeometry(1, 1, 1, 2);
 bladeGeoFar.translate(0, 0.5, 0);
+const bladeGeoVeryFar = new THREE.PlaneGeometry(1, 1, 1, 1);
+bladeGeoVeryFar.translate(0, 0.5, 0);
 
 const aHeightNear = new Float32Array(BLADE_NEAR);
 const aWidthNear  = new Float32Array(BLADE_NEAR);
@@ -1240,6 +1505,10 @@ const aHeightFar  = new Float32Array(BLADE_FAR);
 const aWidthFar   = new Float32Array(BLADE_FAR);
 const aLeanFar    = new Float32Array(BLADE_FAR);
 const aRandomFar  = new Float32Array(BLADE_FAR);
+const aHeightVeryFar = new Float32Array(BLADE_VERY_FAR);
+const aWidthVeryFar  = new Float32Array(BLADE_VERY_FAR);
+const aLeanVeryFar   = new Float32Array(BLADE_VERY_FAR);
+const aRandomVeryFar = new Float32Array(BLADE_VERY_FAR);
 
 bladeGeoNear.setAttribute('aHeight', new THREE.InstancedBufferAttribute(aHeightNear, 1));
 bladeGeoNear.setAttribute('aWidth',  new THREE.InstancedBufferAttribute(aWidthNear, 1));
@@ -1249,9 +1518,18 @@ bladeGeoFar.setAttribute('aHeight', new THREE.InstancedBufferAttribute(aHeightFa
 bladeGeoFar.setAttribute('aWidth',  new THREE.InstancedBufferAttribute(aWidthFar, 1));
 bladeGeoFar.setAttribute('aLean',   new THREE.InstancedBufferAttribute(aLeanFar, 1));
 bladeGeoFar.setAttribute('aRandom', new THREE.InstancedBufferAttribute(aRandomFar, 1));
+bladeGeoVeryFar.setAttribute('aHeight', new THREE.InstancedBufferAttribute(aHeightVeryFar, 1));
+bladeGeoVeryFar.setAttribute('aWidth',  new THREE.InstancedBufferAttribute(aWidthVeryFar, 1));
+bladeGeoVeryFar.setAttribute('aLean',   new THREE.InstancedBufferAttribute(aLeanVeryFar, 1));
+bladeGeoVeryFar.setAttribute('aRandom', new THREE.InstancedBufferAttribute(aRandomVeryFar, 1));
 
-const grassNear = new THREE.InstancedMesh(bladeGeoNear, grassMaterial, BLADE_NEAR);
-const grassFar  = new THREE.InstancedMesh(bladeGeoFar,  grassMaterial, BLADE_FAR);
+const grassMaterialVeryFar = grassMaterial.clone();
+grassMaterialVeryFar.side = THREE.FrontSide;
+grassMaterialVeryFar.uniforms = grassMaterial.uniforms;
+
+const grassNear    = new THREE.InstancedMesh(bladeGeoNear,    grassMaterial, BLADE_NEAR);
+const grassFar     = new THREE.InstancedMesh(bladeGeoFar,     grassMaterial, BLADE_FAR);
+const grassVeryFar = new THREE.InstancedMesh(bladeGeoVeryFar, grassMaterialVeryFar, BLADE_VERY_FAR);
 const dummy = new THREE.Object3D();
 
 const cols = Math.ceil(Math.sqrt(BLADE_COUNT * 2));
@@ -1281,7 +1559,7 @@ for (let n = 0; n < BLADE_NEAR; n++) {
 for (let f = 0; f < BLADE_FAR; f++) {
   const col = f % cols;
   const x   = fieldMinX + (col + Math.random()) * slotW;
-  const zT  = 0.08 + Math.random() * 0.72;
+  const zT  = Math.pow(Math.random(), 2.2) * 0.88;
   const z   = fieldMinZ + zT * (fieldMaxZ - fieldMinZ);
   const depthT  = (z - fieldMinZ) / (fieldMaxZ - fieldMinZ);
   const height  = 0.4 + Math.random() * 0.8;
@@ -1298,14 +1576,77 @@ for (let f = 0; f < BLADE_FAR; f++) {
   dummy.updateMatrix();
   grassFar.setMatrixAt(f, dummy.matrix);
 }
+console.log(
+  'grassFar Z: zT = Math.pow(Math.random(), 2.2) * 0.88 — range [0, 0.88], biased toward fieldMinZ (far)'
+);
+
+for (let v = 0; v < BLADE_VERY_FAR; v++) {
+  const col = v % cols;
+  const x   = fieldMinX + (col + Math.random()) * slotW;
+  const zT  = Math.pow(Math.random(), 3.5) * 0.60;
+  const z   = fieldMinZ + zT * (fieldMaxZ - fieldMinZ);
+  const depthT  = (z - fieldMinZ) / (fieldMaxZ - fieldMinZ);
+  const height  = 0.4 + Math.random() * 0.8;
+  const lean    = -0.25 + Math.random() * 0.7;
+  const random  = Math.random();
+  const widthBase = 0.018 + Math.random() * 0.017;
+  const width   = widthBase * (0.8 + depthT * 0.3);
+  aHeightVeryFar[v] = height;
+  aLeanVeryFar[v]   = lean;
+  aRandomVeryFar[v] = random;
+  aWidthVeryFar[v]  = width;
+  dummy.position.set(x, 0, z);
+  dummy.rotation.set(0, 0, 0);
+  dummy.updateMatrix();
+  grassVeryFar.setMatrixAt(v, dummy.matrix);
+}
+console.log(
+  'grassVeryFar: 90k blades, 1 segment, zT = pow(random, 3.5) * 0.60'
+);
+
 grassNear.instanceMatrix.needsUpdate = true;
 grassFar.instanceMatrix.needsUpdate  = true;
+grassVeryFar.instanceMatrix.needsUpdate = true;
 grassNear.frustumCulled = false;
 grassFar.frustumCulled  = false;
+grassVeryFar.frustumCulled = false;
+
+const groundVertShader = /* glsl */`
+varying float vWorldZ;
+
+void main() {
+  vec4 worldPos = modelMatrix * vec4(position, 1.0);
+  vWorldZ = worldPos.z;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const groundFragShader = /* glsl */`
+uniform float uFieldMinZ;
+uniform float uFieldMaxZ;
+varying float vWorldZ;
+
+void main() {
+  float depthT = clamp((vWorldZ - uFieldMinZ) / (uFieldMaxZ - uFieldMinZ), 0.0, 1.0);
+  vec3 nearCol = vec3(0.039, 0.078, 0.024);
+  vec3 farCol  = vec3(0.082, 0.149, 0.055);
+  gl_FragColor = vec4(mix(farCol, nearCol, depthT), 1.0);
+}
+`;
+
+const groundMaterial = new THREE.ShaderMaterial({
+  vertexShader: groundVertShader,
+  fragmentShader: groundFragShader,
+  uniforms: {
+    uFieldMinZ: { value: fieldMinZ },
+    uFieldMaxZ: { value: fieldMaxZ },
+  },
+});
+groundMaterial.color = new THREE.Color(0x0a1406);
 
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(fieldMaxX - fieldMinX, fieldMaxZ - fieldMinZ),
-  new THREE.MeshBasicMaterial({ color: 0x0a1406 })
+  groundMaterial
 );
 ground.rotation.x = -Math.PI / 2;
 ground.position.set((fieldMinX + fieldMaxX) / 2, 0, (fieldMinZ + fieldMaxZ) / 2);
@@ -1313,19 +1654,6 @@ ground.frustumCulled = false;
 scene.add(ground);
 const groundMesh = ground;
 
-function updateFieldGround() {
-  groundMesh.geometry.dispose();
-  groundMesh.geometry = new THREE.PlaneGeometry(fieldMaxX - fieldMinX, fieldMaxZ - fieldMinZ);
-  groundMesh.position.set((fieldMinX + fieldMaxX) / 2, 0, (fieldMinZ + fieldMaxZ) / 2);
-  grassMaterial.uniforms.uFieldMinX.value = fieldMinX;
-  grassMaterial.uniforms.uFieldMaxX.value = fieldMaxX;
-  grassMaterial.uniforms.uFieldMinZ.value = fieldMinZ;
-  grassMaterial.uniforms.uFieldMaxZ.value = fieldMaxZ;
-  trailMaterial.uniforms.uFieldAspect.value =
-    (fieldMaxZ - fieldMinZ) / (fieldMaxX - fieldMinX);
-  mowMaterial.uniforms.uFieldAspect.value =
-    (fieldMaxZ - fieldMinZ) / (fieldMaxX - fieldMinX);
-}
 
 const DAY_SNAPSHOT = {
   base:      grassMaterial.uniforms.uBaseColor.value.clone(),
@@ -1415,6 +1743,13 @@ function crossfadeToDay() {
   );
 }
 
+function updateBtnTOD() {
+  const btns = document.querySelectorAll('.ui-btn');
+  btns.forEach(b => b.classList.toggle('night', isNight));
+  document.getElementById('info-card')
+    .classList.toggle('night', isNight);
+}
+
 function applyTOD() {
   transitionFrom = snapshotTOD();
   todTransitionT = 0.0;
@@ -1422,8 +1757,8 @@ function applyTOD() {
 
   if (isNight) {
     transitionTo = {
-      base:      new THREE.Vector3(18/255, 32/255, 52/255),
-      mid:       new THREE.Vector3(26/255, 48/255, 75/255),
+      base:      new THREE.Vector3(22/255, 38/255, 58/255),
+      mid:       new THREE.Vector3(32/255, 54/255, 84/255),
       tipPale:   new THREE.Vector3(58/255, 98/255, 148/255),
       tipBright: new THREE.Vector3(72/255, 120/255, 172/255),
       bentBase:  new THREE.Color(12/255,  24/255,  46/255),
@@ -1464,10 +1799,12 @@ function applyTOD() {
     applyAmbiencePlayback();
     crossfadeToDay();
   }
+  updateBtnTOD();
 }
 
 scene.add(grassNear);
 scene.add(grassFar);
+scene.add(grassVeryFar);
 
 const FIREFLY_PERMANENT = 380;
 const FIREFLY_TEMP      = 40;
@@ -1584,6 +1921,7 @@ const fireflyMaterial = new THREE.ShaderMaterial({
 
 const fireflies = new THREE.Points(ffGeo, fireflyMaterial);
 scene.add(fireflies);
+fireflies.frustumCulled = false;
 
 const clipBladeGeo = new THREE.PlaneGeometry(1, 1, 1, 3);
 clipBladeGeo.translate(0, 0.5, 0);
@@ -1713,101 +2051,63 @@ function spawnClips(wx, wz, fraction) {
 // ── Resize ──────────────────────────────────────────────────────────────────
 function onResize() {
   updateRendererSize();
-  updateFieldGround();
 }
 window.addEventListener('resize', onResize);
 
-function bindWind(sliderId, valId, fmt, uniformKey) {
-  const sl = document.getElementById(sliderId);
-  const vl = document.getElementById(valId);
-  sl.addEventListener('input', () => {
-    const v = parseFloat(sl.value);
-    vl.textContent = fmt(v);
-    grassMaterial.uniforms[uniformKey].value = v;
-  });
-  vl.textContent = fmt(parseFloat(sl.value));
-  grassMaterial.uniforms[uniformKey].value = parseFloat(sl.value);
+const infoCard = document.getElementById('info-card');
+const btnInfo = document.getElementById('btn-info');
+
+function infoCardOpen() {
+  return infoCard.classList.contains('visible') ||
+         infoCard.classList.contains('opening');
 }
 
-bindWind('s-w-spd', 'v-w-spd', v => v.toFixed(2), 'uWindSpeed');
-bindWind('s-w-str', 'v-w-str', v => v.toFixed(2), 'uWindStrength');
-bindWind('s-w-turb', 'v-w-turb', v => v.toFixed(2), 'uTurbulence');
-bindWind('s-w-dir', 'v-w-dir', v => v.toFixed(3), 'uWindDir');
-
-const windPanel = document.getElementById('wind-panel');
-const windPanelToggle = document.getElementById('wind-panel-toggle');
-windPanelToggle.addEventListener('click', () => {
-  const collapsed = windPanel.classList.toggle('collapsed');
-  windPanelToggle.textContent = collapsed ? 'WIND ▸' : 'WIND ▾';
-});
-
-function bindUniform(material, sliderId, valId, uniformKey, fmt) {
-  const sl = document.getElementById(sliderId);
-  const vl = document.getElementById(valId);
-  sl.addEventListener('input', () => {
-    const v = parseFloat(sl.value);
-    vl.textContent = fmt(v);
-    material.uniforms[uniformKey].value = v;
-  });
-  vl.textContent = fmt(parseFloat(sl.value));
-  material.uniforms[uniformKey].value = parseFloat(sl.value);
+function showInfoCard() {
+  infoCard.classList.remove('closing');
+  infoCard.classList.add('visible', 'opening');
 }
 
-bindUniform(trailMaterial, 's-i-brush', 'v-i-brush', 'uBrushSize', v => v.toFixed(3));
-bindUniform(trailMaterial, 's-i-str', 'v-i-str', 'uBrushStrength', v => v.toFixed(2));
-bindUniform(trailMaterial, 's-i-fade', 'v-i-fade', 'uFade', v => v.toFixed(3));
-bindUniform(grassMaterial, 's-i-dx', 'v-i-dx', 'uTrailStrengthX', v => v.toFixed(1));
-bindUniform(grassMaterial, 's-i-dz', 'v-i-dz', 'uTrailStrengthZ', v => v.toFixed(1));
+function hideInfoCard() {
+  if (!infoCardOpen() || infoCard.classList.contains('closing')) return;
+  infoCard.classList.remove('visible', 'opening');
+  infoCard.classList.add('closing');
+}
 
-const interactionPanel = document.getElementById('interaction-panel');
-const interactionPanelToggle = document.getElementById('interaction-panel-toggle');
-interactionPanelToggle.addEventListener('click', () => {
-  const collapsed = interactionPanel.classList.toggle('collapsed');
-  interactionPanelToggle.textContent = collapsed ? 'INTERACTION ▸' : 'INTERACTION ▾';
-});
-
-const fullscreenBtn = document.getElementById('fullscreen-btn');
-fullscreenBtn.addEventListener('click', () => {
-  if (!document.fullscreenElement) {
-    document.documentElement.requestFullscreen();
-  } else {
-    document.exitFullscreen();
+infoCard.addEventListener('animationend', (e) => {
+  if (e.target !== infoCard) return;
+  if (e.animationName === 'cardMorphIn') {
+    infoCard.classList.remove('opening');
+  } else if (e.animationName === 'cardMorphOut') {
+    infoCard.classList.remove('closing');
   }
 });
-document.addEventListener('fullscreenchange', () => {
-  fullscreenBtn.textContent = document.fullscreenElement ? '⛶' : '⤢';
+
+btnInfo.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (infoCard.classList.contains('closing')) {
+    infoCard.classList.remove('closing');
+    showInfoCard();
+    return;
+  }
+  if (infoCardOpen()) hideInfoCard();
+  else showInfoCard();
+});
+document.addEventListener('click', (e) => {
+  if (!infoCard.contains(e.target) && e.target !== btnInfo) {
+    hideInfoCard();
+  }
 });
 
-const nightBtn = document.getElementById('night-btn');
-nightBtn.addEventListener('click', () => {
+document.getElementById('btn-tod').addEventListener('click', () => {
   isNight = !isNight;
-  nightBtn.textContent = isNight ? 'DAY' : 'NIGHT';
   applyTOD();
+  document.getElementById('icon-sun').style.display  = isNight ? 'none'  : '';
+  document.getElementById('icon-moon').style.display = isNight ? ''      : 'none';
 });
 
-const muteBtn = document.getElementById('mute-btn');
-muteBtn.addEventListener('click', () => {
-  tryInitAudio();
-  audioMuted = !audioMuted;
-  muteBtn.textContent = audioMuted ? 'UNMUTE' : 'MUTE';
-  if (audioReady) {
-    gain1.gain.value = 0;
-    gain2.gain.value = 0;
-    gainWhoosh.gain.value = 0;
-    gainRustle.gain.value = 0;
-    if (cutDragGain) cutDragGain.gain.value = 0;
-    dayAmbienceGain.gain.value   = audioMuted ? 0 : (isNight ? 0.0 : 0.15);
-    cricketMasterGain.gain.value = audioMuted ? 0 : (isNight ? 0.9 : 0.0);
-  }
-});
+updateBtnTOD();
 
 const clock = new THREE.Clock();
-
-let statsFPS = 0;
-let statsFrameTime = 0;
-let statsFrameCount = 0;
-let statsLastTime = performance.now();
-let statsFPSSmooth = 0;
 
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
@@ -1816,7 +2116,12 @@ document.addEventListener('visibilitychange', () => {
 });
 
 const INTRO_DURATION = 2.0;
-let introStartTime = null;
+const LOADING_MIN_MS = 2000;
+let sceneReady       = false;
+let introStartTime   = null;
+const INTRO_HOLD_MS  = 1000;
+let frameReady       = false;
+let timerReady       = false;
 
 camera.updateProjectionMatrix();
 
@@ -2005,45 +2310,56 @@ function updateClips(delta) {
 }
 
 // ── Render loop ─────────────────────────────────────────────────────────────
+function hideLoadingScreen() {
+  if (sceneReady) return;
+  const overlay = document.getElementById('loading-overlay');
+  if (!overlay) return;
+  sceneReady = true;
+  overlay.classList.add('hidden');
+  setTimeout(() => overlay.remove(), 900);
+  setTimeout(() => { introStartTime = performance.now(); }, INTRO_HOLD_MS);
+}
+
+function tryHideLoader() {
+  if (frameReady && timerReady) hideLoadingScreen();
+}
+
+setTimeout(() => {
+  timerReady = true;
+  tryHideLoader();
+}, LOADING_MIN_MS);
+
 function animate() {
-  requestAnimationFrame(animate);
+  if (devMode && fpsEl) {
+    fpsFrames++;
+    const fpsNow = performance.now();
+    if (fpsNow - fpsIntervalStart >= 1000) {
+      fpsEl.textContent = Math.round(fpsFrames * 1000 / (fpsNow - fpsIntervalStart)) + ' FPS';
+      fpsFrames = 0;
+      fpsIntervalStart = fpsNow;
+    }
+  }
+
+  if (!sceneReady) {
+    renderer.render(scene, camera);
+    return;
+  }
 
   const delta = clock.getDelta();
   const safeDelta = Math.min(delta, 0.05);
   const elapsed = clock.elapsedTime;
 
-  // Performance stats
-  statsFrameCount++;
-  statsFrameTime = delta * 1000;
-  const statsNow = performance.now();
-  if (statsNow - statsLastTime >= 500) {
-    statsFPS = Math.round(statsFrameCount * 1000 / (statsNow - statsLastTime));
-    statsFPSSmooth = statsFPSSmooth * 0.7 + statsFPS * 0.3;
-    statsFrameCount = 0;
-    statsLastTime = statsNow;
-    const ri = renderer.info;
-    document.getElementById('stats-panel').innerHTML =
-      `FPS: <b>${statsFPS}</b> (avg ${Math.round(statsFPSSmooth)})<br>` +
-      `Frame: ${statsFrameTime.toFixed(1)} ms<br>` +
-      `Draw calls: ${ri.render.calls}<br>` +
-      `Triangles: ${(ri.render.triangles/1000).toFixed(0)}k<br>` +
-      `Geometries: ${ri.memory.geometries}<br>` +
-      `Textures: ${ri.memory.textures}<br>` +
-      `Blades near: ${BLADE_NEAR.toLocaleString()}<br>` +
-      `Blades far: ${BLADE_FAR.toLocaleString()}<br>` +
-      `Total: ${(BLADE_NEAR+BLADE_FAR).toLocaleString()}`;
-  }
-
-  if (introStartTime === null) introStartTime = elapsed;
-  const introElapsed = elapsed - introStartTime;
-  if (introElapsed < INTRO_DURATION) {
-    const t = introElapsed / INTRO_DURATION;
-    const ease = 1 - Math.pow(1 - t, 3);
-    camera.position.y = CAM_INTRO_START_Y + (CAM_INTRO_END_Y - CAM_INTRO_START_Y) * ease;
-    camera.position.z = CAM_INTRO_START_Z + (CAM_INTRO_END_Z - CAM_INTRO_START_Z) * ease;
-    camera.fov = CAM_INTRO_START_FOV + (CAM_INTRO_END_FOV - CAM_INTRO_START_FOV) * ease;
-    camera.lookAt(0, CAM_LOOK_Y, CAM_LOOK_Z);
-    camera.updateProjectionMatrix();
+  if (introStartTime !== null) {
+    const introElapsed = (performance.now() - introStartTime) / 1000;
+    const t = Math.min(1, introElapsed / INTRO_DURATION);
+    if (t < 1) {
+      const ease = 1 - Math.pow(1 - t, 3);
+      camera.position.y = CAM_INTRO_START_Y + (CAM_INTRO_END_Y - CAM_INTRO_START_Y) * ease;
+      camera.position.z = CAM_INTRO_START_Z + (CAM_INTRO_END_Z - CAM_INTRO_START_Z) * ease;
+      camera.fov = CAM_INTRO_START_FOV + (CAM_INTRO_END_FOV - CAM_INTRO_START_FOV) * ease;
+      camera.lookAt(0, CAM_LOOK_Y, CAM_LOOK_Z);
+      camera.updateProjectionMatrix();
+    }
   }
 
   updateGust(safeDelta);
@@ -2124,7 +2440,7 @@ function animate() {
     const onGrass = cursorTrailUV.x >= 0 && cursorTrailUV.x <= 1 &&
                     cursorTrailUV.y >= 0 && cursorTrailUV.y <= 1;
     let cutTarget = 0;
-    if (!audioMuted && isMouseDown && onGrass) {
+    if (!audioMuted && (isMouseDown || isTouchMowing) && onGrass) {
       const speedFactor = Math.pow(Math.min(1, smoothSpeed * 0.6), 0.5);
       cutTarget = 0.26 * speedFactor;
     }
@@ -2169,6 +2485,7 @@ function animate() {
 
   grassNear.updateMatrixWorld();
   grassFar.updateMatrixWorld();
+  grassVeryFar.updateMatrixWorld();
   camera.updateMatrixWorld();
   const canvasW = window.innerWidth;
   const canvasH = window.innerHeight;
@@ -2186,9 +2503,30 @@ function animate() {
   renderer.render(scene, camera);
 }
 
-animate();
+renderer.setAnimationLoop(() => {
+  renderer.render(scene, camera);
+  renderer.setAnimationLoop(animate);
+  frameReady = true;
+  tryHideLoader();
+});
 
-console.log(`Touch Grass WebGL — ${BLADE_COUNT} instanced blades`);
+console.log(`Touch Grass WebGL — ${BLADE_COUNT + BLADE_VERY_FAR} instanced blades`);
 </script>
+
+<div id="loading-overlay">
+  <div id="loading-stack">
+    <div id="loading-audio-hint">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+        aria-hidden="true">
+        <path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/>
+      </svg>
+      <span>Headphones &amp; audio<br>strongly recommended</span>
+    </div>
+    <div id="loading-bar-track">
+      <div id="loading-bar-fill"></div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
