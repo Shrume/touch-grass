@@ -3,15 +3,45 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Touch Grass — WebGL</title>
+<title>Touch Grass</title>
 <style>
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-html, body { width: 100%; height: 100%; overflow: hidden; background: #040a01; }
+* { cursor: none !important; }
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #040a01;
+  cursor: none !important;
+}
 canvas {
   display: block;
   position: fixed;
   inset: 0;
-  cursor: url('assets/Hand32.svg') 12 4, auto;
+  cursor: none !important;
+}
+
+#custom-cursor {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 42px;
+  height: 42px;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+#custom-cursor img,
+#custom-cursor-hand,
+#custom-cursor-sci {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+#custom-cursor img[hidden] {
+  display: none;
 }
 
 #fps-dev {
@@ -24,6 +54,97 @@ canvas {
   font-size: 12px;
   color: #ffffff;
   pointer-events: none;
+}
+
+#ff-dev-panel {
+  display: none;
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 200;
+  width: 220px;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+  border-radius: 4px;
+  overflow: hidden;
+}
+#ff-dev-panel .ff-dev-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 12px;
+  color: #fff;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  opacity: 0.9;
+}
+#ff-dev-panel .ff-dev-header:hover {
+  opacity: 1;
+}
+#ff-dev-panel .ff-dev-chevron {
+  font-size: 10px;
+  opacity: 0.7;
+  transition: transform 0.15s ease;
+}
+#ff-dev-panel.ff-dev-collapsed .ff-dev-chevron {
+  transform: rotate(-90deg);
+}
+#ff-dev-panel .ff-dev-body {
+  padding: 0 12px 10px;
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
+}
+#ff-dev-panel.ff-dev-collapsed .ff-dev-body {
+  display: none;
+}
+#ff-dev-panel .ff-dev-body label {
+  display: block;
+  margin: 6px 0 2px;
+  opacity: 0.85;
+}
+#ff-dev-panel .ff-dev-body input[type="range"] {
+  width: 100%;
+  margin: 0 0 2px;
+  accent-color: #ffffff;
+}
+#ff-dev-panel .ff-dev-val {
+  opacity: 0.65;
+  font-size: 10px;
+  margin-bottom: 4px;
+}
+#ff-dev-panel .ff-dev-body input[type="number"] {
+  width: 100%;
+  margin-bottom: 4px;
+  padding: 3px 6px;
+  font: inherit;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 3px;
+}
+#ff-dev-panel .ff-dev-body button {
+  width: 100%;
+  margin-top: 6px;
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 11px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+  cursor: pointer;
+}
+#ff-dev-panel .ff-dev-body button:hover {
+  background: rgba(255, 255, 255, 0.25);
 }
 
 .ui-btn {
@@ -238,6 +359,11 @@ canvas {
 <body>
 
 <div id="fps-dev"></div>
+<div id="ff-dev-panel"></div>
+<div id="custom-cursor" aria-hidden="true">
+  <img id="custom-cursor-hand" src="assets/Hand32.svg" width="32" height="32" alt="">
+  <img id="custom-cursor-sci" src="assets/Sci32.svg" width="32" height="32" alt="" hidden>
+</div>
 
 <!-- Info button -->
 <button class="ui-btn" id="btn-info" aria-label="Information">
@@ -285,6 +411,17 @@ if (fpsEl) fpsEl.style.display = devMode ? 'block' : 'none';
 let fpsFrames = 0;
 let fpsIntervalStart = performance.now();
 
+let FIREFLY_PERMANENT = 280;
+let FIREFLY_TEMP      = 40;
+let FIREFLY_COUNT     = FIREFLY_PERMANENT + FIREFLY_TEMP;
+let FF_SIZE_BASE      = 100;
+let FF_BRI_MIN        = 2;
+let FF_BRI_RANGE      = 6;
+let FF_GRASS_FALLOFF  = 1.25;
+let FF_GRASS_SCALE    = 0.35;
+let FF_REPEL_RADIUS   = 17;
+let FF_NIGHT_DELAY    = 2;
+
 const BLADE_NEAR      = 260000;
 const BLADE_FAR       = 180000;
 const BLADE_VERY_FAR  = 90000;
@@ -330,12 +467,14 @@ void main() {
   prev.rg = mix(vec2(0.5), prev.rg, prev.b);
   if (prev.b < 0.012) prev = vec4(0.5, 0.5, 0.0, 1.0);
 
-  vec2 trailDelta = vUv - uMouse;
-  trailDelta.x *= uFieldAspect;
-  float dist = length(trailDelta);
-  float brush = smoothstep(uBrushSize, 0.0, dist) * uBrushStrength * pow(max(0.0, uCursorSpeed), 0.7);
-
   vec2 encodedDir = uCursorDir * 0.5 + 0.5;
+
+  float farBoost = 1.0 + (1.0 - uMouse.y) * 0.9;
+  float boostedBrush = uBrushSize * farBoost;
+  float dist = length((vUv - uMouse) * vec2(uFieldAspect, 1.0));
+  float brush = smoothstep(boostedBrush, 0.0, dist);
+  float boostedStrength = (uBrushStrength * farBoost) * (0.4 + uCursorSpeed * 0.6);
+  brush *= boostedStrength;
 
   vec2 existingDir = prev.rg * 2.0 - 1.0;
   float trailAlignment = dot(existingDir, uCursorDir);
@@ -389,10 +528,17 @@ uniform vec2 uMouse;
 uniform vec2 uMousePrev;
 uniform float uBrushSize;
 uniform float uCutMode;
+uniform float uDecayOnly;
+uniform float uDecayDelta;
 uniform float uFieldAspect;
 varying vec2 vUv;
 void main() {
   float prev = texture2D(uPrevMow, vUv).r;
+  if (uDecayOnly > 0.5) {
+    float faded = max(0.0, prev - uDecayDelta);
+    gl_FragColor = vec4(faded, 0.0, 0.0, 1.0);
+    return;
+  }
   vec2 pa = vUv - uMousePrev;
   pa.x *= uFieldAspect;
   vec2 ba = uMouse - uMousePrev;
@@ -408,10 +554,7 @@ void main() {
   float brush = uCutMode > 0.5
     ? step(dist, uBrushSize * 0.6)
     : 0.0;
-  // Linear decay: 1/(60fps * 20s total) = decrement per frame.
-  float decayRate = 1.0 / (60.0 * 20.0);
-  float faded = max(0.0, prev - decayRate);
-  gl_FragColor = vec4(max(faded, brush), 0.0, 0.0, 1.0);
+  gl_FragColor = vec4(max(prev, brush), 0.0, 0.0, 1.0);
 }
 `;
 
@@ -422,6 +565,8 @@ const mowMaterial = new THREE.ShaderMaterial({
     uMousePrev:  { value: new THREE.Vector2(-10, -10) },
     uBrushSize:  { value: 0.007 },
     uCutMode:    { value: 0.0 },
+    uDecayOnly:  { value: 0.0 },
+    uDecayDelta: { value: 0.0 },
     uFieldAspect: { value: 1.0 },
   },
   vertexShader:   trailVertShader,
@@ -444,6 +589,7 @@ let touch1HasPrev = false;
 const MOW_CELLS_X = 48;
 const MOW_CELLS_Z = 48;
 const mowCells    = new Float32Array(MOW_CELLS_X * MOW_CELLS_Z);
+const mowSampleU16 = new Uint16Array(4);
 let   mowElapsed  = 0;
 
 function mowCellIdx(wx, wz) {
@@ -454,9 +600,20 @@ function mowCellIdx(wx, wz) {
   return cz * MOW_CELLS_X + cx;
 }
 
+function mowRTIntensityAt(wx, wz) {
+  const u = Math.max(0, Math.min(1, (wx - fieldMinX) / (fieldMaxX - fieldMinX)));
+  const v = Math.max(0, Math.min(1, (wz - fieldMinZ) / (fieldMaxZ - fieldMinZ)));
+  const px = Math.min(255, Math.floor(u * 256));
+  const py = Math.min(255, Math.floor(v * 256));
+  renderer.readRenderTargetPixels(mowRead, px, py, 1, 1, mowSampleU16);
+  return THREE.DataUtils.fromHalfFloat(mowSampleU16[0]);
+}
+
 function mowCellCut(wx, wz) {
   const idx = mowCellIdx(wx, wz);
-  return mowCells[idx] > 0 && (mowElapsed - mowCells[idx]) < 20.0;
+  const timerActive = mowCells[idx] > 0 && (mowElapsed - mowCells[idx]) < 20.0;
+  if (!timerActive) return false;
+  return mowRTIntensityAt(wx, wz) > 0.5;
 }
 
 function mowCellMark(wx, wz) {
@@ -482,11 +639,12 @@ function swapMowRT() {
   grassMaterial.uniforms.uMowMap.value = mowRead.texture;
 }
 
-function renderMowPass(endU, endV, startU, startV, cutMode) {
+function renderMowPass(endU, endV, startU, startV, cutMode, decayOnly) {
   mowMaterial.uniforms.uPrevMow.value = mowRead.texture;
   mowMaterial.uniforms.uMouse.value.set(endU, endV);
   mowMaterial.uniforms.uMousePrev.value.set(startU, startV);
   mowMaterial.uniforms.uCutMode.value = cutMode ? 1.0 : 0.0;
+  mowMaterial.uniforms.uDecayOnly.value = decayOnly ? 1.0 : 0.0;
   renderer.setRenderTarget(mowWrite);
   renderer.render(mowScene, trailCamera);
   renderer.setRenderTarget(null);
@@ -496,6 +654,13 @@ function renderMowPass(endU, endV, startU, startV, cutMode) {
 function updateMow(safeDelta) {
   mowElapsed += safeDelta;
   mowMaterial.uniforms.uBrushSize.value = trailMaterial.uniforms.uBrushSize.value;
+  mowMaterial.uniforms.uDecayDelta.value = safeDelta / 20.0;
+  renderMowPass(
+    cursorTrailUV.x, cursorTrailUV.y,
+    prevMowUV.x, prevMowUV.y,
+    false, true
+  );
+
   const cutting = isMouseDown || isTouchMowing;
   const onGrass =
     cursorTrailUV.x >= 0 && cursorTrailUV.x <= 1 &&
@@ -514,26 +679,25 @@ function updateMow(safeDelta) {
     const stepLen = brush * 0.25;
     const steps = Math.min(48, Math.max(1, Math.ceil(dist / stepLen)));
 
+    const fieldW = fieldMaxX - fieldMinX;
+    const fieldD = fieldMaxZ - fieldMinZ;
     for (let i = 1; i <= steps; i++) {
       const t0 = (i - 1) / steps;
       const t1 = i / steps;
+      const u1 = startU + (endU - startU) * t1;
+      const v1 = startV + (endV - startV) * t1;
+      applyMowAtPoint(fieldMinX + u1 * fieldW, fieldMinZ + v1 * fieldD);
       renderMowPass(
         startU + (endU - startU) * t1,
         startV + (endV - startV) * t1,
         startU + (endU - startU) * t0,
         startV + (endV - startV) * t0,
-        true
+        true, false
       );
     }
-    applyMowAtPoint(cursorWorldX, cursorWorldZ);
     prevMowUV.set(endU, endV);
-  } else {
-    renderMowPass(
-      cursorTrailUV.x, cursorTrailUV.y,
-      prevMowUV.x, prevMowUV.y,
-      false
-    );
-    if (onGrass) prevMowUV.set(cursorTrailUV.x, cursorTrailUV.y);
+  } else if (onGrass) {
+    prevMowUV.set(cursorTrailUV.x, cursorTrailUV.y);
   }
 }
 
@@ -640,6 +804,7 @@ let nightAmbienceSource = null;
 let cricketMasterGain;
 let cutDragSrc  = null;
 let cutDragGain = null;
+let lastSnipTime = 0;
 let lastMouseX = 0;
 let lastMouseY = 0;
 let smoothVelocity = 0;
@@ -830,6 +995,8 @@ function fireCutSnip() {
   if (!audioCtx || audioMuted) return;
   if (audioCtx.state === 'suspended') audioCtx.resume();
   const now = audioCtx.currentTime;
+  if (now - lastSnipTime < 0.05) return;
+  lastSnipTime = now;
   const sr  = audioCtx.sampleRate;
   const dur = 0.055;
   const buf = audioCtx.createBuffer(1, Math.ceil(dur * sr), sr);
@@ -1081,6 +1248,47 @@ function updateAudioFromTrail() {
   rustleFilter.Q.value = 2.5 + smoothWindActivity * 1.5;
 }
 
+const customCursor = document.getElementById('custom-cursor');
+const customCursorHand = document.getElementById('custom-cursor-hand');
+const customCursorSci = document.getElementById('custom-cursor-sci');
+let cursorHoverDepth = 0;
+
+function updateCustomCursorPosition(clientX, clientY) {
+  customCursor.style.left = `${clientX}px`;
+  customCursor.style.top = `${clientY}px`;
+}
+
+function updateCustomCursorScale() {
+  const cursorOnGrass =
+    cursorTrailUV.x >= 0 && cursorTrailUV.x <= 1 &&
+    cursorTrailUV.y >= 0 && cursorTrailUV.y <= 1;
+  const depthScale = cursorOnGrass
+    ? Math.max(0.38, 0.38 + 0.62 * cursorTrailUV.y)
+    : 1.0;
+  const hoverMul = cursorHoverDepth > 0 ? 1.1 : 1.0;
+  customCursor.style.transform =
+    `translate(-50%, -50%) scale(${depthScale * hoverMul})`;
+  const cutting = isMouseDown || isTouchMowing;
+  customCursorHand.hidden = cutting;
+  customCursorSci.hidden = !cutting;
+}
+
+document.addEventListener('mousemove', (e) => {
+  updateCustomCursorPosition(e.clientX, e.clientY);
+});
+document.addEventListener('mouseleave', () => {
+  customCursor.style.opacity = '0';
+});
+document.addEventListener('mouseenter', () => {
+  customCursor.style.opacity = '1';
+});
+document.querySelectorAll('.ui-btn, #info-card, #info-card a').forEach((el) => {
+  el.addEventListener('mouseenter', () => { cursorHoverDepth++; });
+  el.addEventListener('mouseleave', () => {
+    cursorHoverDepth = Math.max(0, cursorHoverDepth - 1);
+  });
+});
+
 renderer.domElement.addEventListener('mousemove', e => {
   updateMouseFromEvent(e.clientX, e.clientY);
 });
@@ -1089,16 +1297,13 @@ renderer.domElement.addEventListener('mousedown', (e) => {
   updateMouseFromEvent(e.clientX, e.clientY);
   isMouseDown = true;
   prevMowUV.set(cursorTrailUV.x, cursorTrailUV.y);
-  renderer.domElement.style.cursor = "url('assets/Sci32.svg') 16 16, crosshair";
 });
 renderer.domElement.addEventListener('mouseup', () => {
   isMouseDown = false;
-  renderer.domElement.style.cursor = "url('assets/Hand32.svg') 12 4, auto";
 });
 renderer.domElement.addEventListener('click', () => tryInitAudio());
 renderer.domElement.addEventListener('mouseleave', () => {
   isMouseDown = false;
-  renderer.domElement.style.cursor = "url('assets/Hand32.svg') 12 4, auto";
   clearCursorTrail();
 });
 
@@ -1358,6 +1563,10 @@ uniform vec3 uBentTipLo;
 uniform vec3 uBentTipHi;
 uniform float uFieldMinZ;
 uniform float uFieldMaxZ;
+uniform float uFFGrassFalloff;
+uniform float uFFGrassScale;
+uniform vec3 uHazeColor;
+uniform vec3 uFFGrassTint;
 uniform vec3 uFFLightPos[12];
 uniform float uFFLightBri[12];
 varying vec2 vUv;
@@ -1402,24 +1611,24 @@ void main() {
   col += uSpecColor * specular;
 
   float depthT = clamp((vWorldPos.z - uFieldMinZ) / (uFieldMaxZ - uFieldMinZ), 0.0, 1.0);
-  vec3 hazeColor = vec3(0.13, 0.22, 0.09);
-  col = mix(hazeColor, col, 0.55 + depthT * 0.45);
+  col = mix(uHazeColor, col, 0.55 + depthT * 0.45);
 
   float ffLight = 0.0;
   for (int i = 0; i < 12; i++) {
     if (uFFLightBri[i] < 0.01) continue;
     vec3 delta = uFFLightPos[i] - vWorldPos;
     float dist2 = dot(delta, delta);
-    ffLight += uFFLightBri[i] * (1.0 / (1.0 + dist2 * 0.8));
+    ffLight += uFFLightBri[i] * (1.0 / (1.0 + dist2 * uFFGrassFalloff));
   }
-  ffLight = clamp(ffLight * 0.35, 0.0, 0.25);
-  col += vec3(0.45, 0.72, 0.15) * ffLight;
+  ffLight = clamp(ffLight * uFFGrassScale, 0.0, 0.25);
+  col += uFFGrassTint * ffLight;
 
-  if (vMow > 0.5) {
+  float cutAmt = clamp((vMow - 0.35) * (1.0 / 0.2), 0.0, 1.0);
+  if (cutAmt > 0.001) {
     float nightCut = smoothstep(0.52, 0.34, uLightMin);
-    col *= mix(1.0, 1.12, nightCut);
+    col *= mix(1.0, mix(1.0, 1.12, nightCut), cutAmt);
     float atTop = smoothstep(uCutHeight * 0.85, uCutHeight, vUv.y * vBladeHeight);
-    col = mix(col, col * mix(1.35, 1.48, nightCut), atTop * 0.6);
+    col = mix(col, col * mix(1.35, 1.48, nightCut), atTop * 0.6 * cutAmt);
   }
 
   gl_FragColor = vec4(col, 1.0);
@@ -1472,6 +1681,10 @@ const grassMaterial = new THREE.ShaderMaterial({
     uBentTipHi:       { value: new THREE.Color(90 / 255, 152 / 255, 58 / 255) },
     uFFLightPos:      { value: new Float32Array(12 * 3) },
     uFFLightBri:      { value: new Float32Array(12) },
+    uFFGrassFalloff:  { value: FF_GRASS_FALLOFF },
+    uFFGrassScale:    { value: FF_GRASS_SCALE },
+    uHazeColor:       { value: new THREE.Vector3(0.13, 0.22, 0.09) },
+    uFFGrassTint:     { value: new THREE.Vector3(0.45, 0.72, 0.15) },
   },
 });
 
@@ -1624,13 +1837,13 @@ void main() {
 const groundFragShader = /* glsl */`
 uniform float uFieldMinZ;
 uniform float uFieldMaxZ;
+uniform vec3 uGroundNear;
+uniform vec3 uGroundFar;
 varying float vWorldZ;
 
 void main() {
   float depthT = clamp((vWorldZ - uFieldMinZ) / (uFieldMaxZ - uFieldMinZ), 0.0, 1.0);
-  vec3 nearCol = vec3(0.039, 0.078, 0.024);
-  vec3 farCol  = vec3(0.082, 0.149, 0.055);
-  gl_FragColor = vec4(mix(farCol, nearCol, depthT), 1.0);
+  gl_FragColor = vec4(mix(uGroundFar, uGroundNear, depthT), 1.0);
 }
 `;
 
@@ -1638,11 +1851,12 @@ const groundMaterial = new THREE.ShaderMaterial({
   vertexShader: groundVertShader,
   fragmentShader: groundFragShader,
   uniforms: {
-    uFieldMinZ: { value: fieldMinZ },
-    uFieldMaxZ: { value: fieldMaxZ },
+    uFieldMinZ:  { value: fieldMinZ },
+    uFieldMaxZ:  { value: fieldMaxZ },
+    uGroundNear: { value: new THREE.Color().setRGB(0.039, 0.078, 0.024) },
+    uGroundFar:  { value: new THREE.Color().setRGB(0.082, 0.149, 0.055) },
   },
 });
-groundMaterial.color = new THREE.Color(0x0a1406);
 
 const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(fieldMaxX - fieldMinX, fieldMaxZ - fieldMinZ),
@@ -1665,11 +1879,14 @@ const DAY_SNAPSHOT = {
   lightMin:  grassMaterial.uniforms.uLightMin.value,
   aoMin:     grassMaterial.uniforms.uAOMin.value,
   sky:       renderer.getClearColor(new THREE.Color()),
-  ground:    groundMesh.material.color.clone(),
+  groundNear: groundMaterial.uniforms.uGroundNear.value.clone(),
+  groundFar:  groundMaterial.uniforms.uGroundFar.value.clone(),
   bentBase:  grassMaterial.uniforms.uBentBase.value.clone(),
   bentMid:   grassMaterial.uniforms.uBentMid.value.clone(),
   bentTipLo: grassMaterial.uniforms.uBentTipLo.value.clone(),
   bentTipHi: grassMaterial.uniforms.uBentTipHi.value.clone(),
+  hazeColor: grassMaterial.uniforms.uHazeColor.value.clone(),
+  ffGrassTint: grassMaterial.uniforms.uFFGrassTint.value.clone(),
 };
 
 let isNight = false;
@@ -1700,7 +1917,10 @@ function snapshotTOD() {
     lightMin:  u.uLightMin.value,
     aoMin:     u.uAOMin.value,
     sky:       renderer.getClearColor(new THREE.Color()),
-    ground:    groundMesh.material.color.clone(),
+    groundNear: groundMaterial.uniforms.uGroundNear.value.clone(),
+    groundFar:  groundMaterial.uniforms.uGroundFar.value.clone(),
+    hazeColor:  u.uHazeColor.value.clone(),
+    ffGrassTint: u.uFFGrassTint.value.clone(),
   };
 }
 
@@ -1770,11 +1990,14 @@ function applyTOD() {
       lightMin:  0.35,
       aoMin:     0.08,
       sky:       new THREE.Color(3/255, 5/255, 12/255),
-      ground:    new THREE.Color(0, 0, 0),
+      groundNear: new THREE.Color(0x03050c),
+      groundFar:  new THREE.Color().setRGB(0.078, 0.135, 0.207),
+      hazeColor:  new THREE.Vector3(0.08, 0.10, 0.18),
+      ffGrassTint: new THREE.Vector3(0.25, 0.35, 0.55),
     };
     fireflyFadeT = 0.0;
     fireflyMaterial.uniforms.uVisible.value = 0.0;
-    fireflyDelay = 3.0;
+    fireflyDelay = FF_NIGHT_DELAY;
     applyAmbiencePlayback();
     crossfadeToNight();
   } else {
@@ -1792,7 +2015,10 @@ function applyTOD() {
       lightMin:  DAY_SNAPSHOT.lightMin,
       aoMin:     DAY_SNAPSHOT.aoMin,
       sky:       DAY_SNAPSHOT.sky.clone(),
-      ground:    DAY_SNAPSHOT.ground.clone(),
+      groundNear: DAY_SNAPSHOT.groundNear.clone(),
+      groundFar:  DAY_SNAPSHOT.groundFar.clone(),
+      hazeColor:  DAY_SNAPSHOT.hazeColor.clone(),
+      ffGrassTint: DAY_SNAPSHOT.ffGrassTint.clone(),
     };
     fireflyFadeT = fireflyMaterial.uniforms.uVisible.value;
     fireflyDelay = 0.0;
@@ -1806,82 +2032,101 @@ scene.add(grassNear);
 scene.add(grassFar);
 scene.add(grassVeryFar);
 
-const FIREFLY_PERMANENT = 380;
-const FIREFLY_TEMP      = 40;
-const FIREFLY_COUNT     = FIREFLY_PERMANENT + FIREFLY_TEMP;
+let ffPositions;
+let ffBrightness;
+let ffGeo;
+let ff = [];
+let fireflies;
 
-const ffPositions  = new Float32Array(FIREFLY_COUNT * 3);
-const ffBrightness = new Float32Array(FIREFLY_COUNT);
+const FF_LIGHT_SLOTS   = 12;
+const FF_SET_ENTER     = 0.15;
+const FF_SET_LEAVE     = 0.05;
+const FF_SLOT_FADE_DUR = 0.3;
+const ffSlots = Array.from({ length: FF_LIGHT_SLOTS }, () => ({
+  fireflyIndex: null,
+  bri: 0,
+}));
 
-const ffGeo = new THREE.BufferGeometry();
-ffGeo.setAttribute('position',    new THREE.BufferAttribute(ffPositions,  3).setUsage(THREE.DynamicDrawUsage));
-ffGeo.setAttribute('aBrightness', new THREE.BufferAttribute(ffBrightness, 1).setUsage(THREE.DynamicDrawUsage));
+function resetFireflyGrassSlots() {
+  for (let s = 0; s < FF_LIGHT_SLOTS; s++) {
+    ffSlots[s].fireflyIndex = null;
+    ffSlots[s].bri = 0;
+  }
+}
 
-const ff = Array.from({ length: FIREFLY_PERMANENT }, () => {
-  const zT   = Math.pow(Math.random(), 0.55);
-  const homeX = fieldMinX + Math.random() * (fieldMaxX - fieldMinX);
-  const homeZ = fieldMinZ + zT * (fieldMaxZ - fieldMinZ);
+function updateFireflyGrassLights(delta) {
+  for (let i = 0; i < FIREFLY_COUNT; i++) {
+    const b = ff[i].brightness;
+    if (!ff[i].ffInSet && b > FF_SET_ENTER) ff[i].ffInSet = true;
+    else if (ff[i].ffInSet && b < FF_SET_LEAVE) ff[i].ffInSet = false;
+  }
 
-  const wanderRadius = 1.2 + Math.random() * 4.5;
-  const wanderSpeed  = 0.15 + Math.random() * 0.55;
-  const heightMin    = 0.2  + Math.random() * 0.4;
-  const heightMax    = heightMin + 0.6 + Math.random() * 2.2;
-  const heightSpeed  = 0.08 + Math.random() * 0.18;
-  const glowSize     = 5.0  + Math.random() * 10.0;
+  const fadeK = Math.min(1, delta / FF_SLOT_FADE_DUR);
+  const trackK = Math.min(1, delta / 0.05);
 
-  return {
-    homeX, homeZ,
-    x: homeX, y: heightMin + Math.random() * (heightMax - heightMin), z: homeZ,
-    wanderRadius, wanderSpeed,
-    heightMin, heightMax, heightSpeed,
-    heightPhase: Math.random() * Math.PI * 2,
-    baseGlow:      0.3 + Math.random() * 0.4,
-    breatheSpeed:  0.18 + Math.random() * 0.28,
-    breathePhase:  Math.random() * Math.PI * 2,
-    fadeState:     'on',
-    fadeTimer:     6 + Math.random() * 12,
-    fadeProgress:  0,
-    brightness:    0,
-    glowSize,
-    windAccumX:  0,
-    windAccumZ:  0,
-  };
-});
+  for (let s = 0; s < FF_LIGHT_SLOTS; s++) {
+    const slot = ffSlots[s];
+    if (slot.fireflyIndex === null) continue;
 
-for (let i = 0; i < FIREFLY_TEMP; i++) {
-  ff.push({
-    homeX: 0, homeZ: 0,
-    x: 0, y: 0, z: 0,
-    wanderRadius: 1.5 + Math.random() * 2.0,
-    wanderSpeed:  0.3  + Math.random() * 0.4,
-    heightMin: 0.3, heightMax: 2.5,
-    heightSpeed: 0.2 + Math.random() * 0.2,
-    heightPhase: Math.random() * Math.PI * 2,
-    baseGlow: 0.7,
-    breatheSpeed: 0.4,
-    breathePhase: Math.random() * Math.PI * 2,
-    fadeState: 'on',
-    fadeTimer: 999,
-    fadeProgress: 0,
-    brightness: 0,
-    windAccumX: 0,
-    windAccumZ: 0,
-    isTemp:   true,
-    active:   false,
-    lifespan: 0,
-    maxLife:  0,
-    repelX:   0,
-    repelZ:   0,
-  });
+    const f = ff[slot.fireflyIndex];
+    const target = f.ffInSet ? f.brightness * fireflyFadeT : 0;
+    const k = f.ffInSet ? trackK : fadeK;
+    slot.bri += (target - slot.bri) * k;
+
+    if (!f.ffInSet && slot.bri < 0.01) {
+      slot.fireflyIndex = null;
+      slot.bri = 0;
+    }
+  }
+
+  const occupied = new Set();
+  for (let s = 0; s < FF_LIGHT_SLOTS; s++) {
+    if (ffSlots[s].fireflyIndex !== null) occupied.add(ffSlots[s].fireflyIndex);
+  }
+
+  const candidates = [];
+  for (let i = 0; i < FIREFLY_COUNT; i++) {
+    if (ff[i].ffInSet && !occupied.has(i)) candidates.push(i);
+  }
+  candidates.sort((a, b) => ff[b].brightness - ff[a].brightness);
+
+  let ci = 0;
+  for (let s = 0; s < FF_LIGHT_SLOTS && ci < candidates.length; s++) {
+    if (ffSlots[s].fireflyIndex === null) {
+      ffSlots[s].fireflyIndex = candidates[ci++];
+      ffSlots[s].bri = 0;
+    }
+  }
+
+  const ffLightPos = new Float32Array(FF_LIGHT_SLOTS * 3);
+  const ffLightBri = new Float32Array(FF_LIGHT_SLOTS);
+  for (let s = 0; s < FF_LIGHT_SLOTS; s++) {
+    const slot = ffSlots[s];
+    if (slot.fireflyIndex !== null) {
+      const f = ff[slot.fireflyIndex];
+      ffLightPos[s * 3]     = f.x;
+      ffLightPos[s * 3 + 1] = f.y;
+      ffLightPos[s * 3 + 2] = f.z;
+      ffLightBri[s]         = slot.bri;
+    }
+  }
+  grassMaterial.uniforms.uFFLightPos.value = ffLightPos;
+  grassMaterial.uniforms.uFFLightBri.value = ffLightBri;
 }
 
 const fireflyMaterial = new THREE.ShaderMaterial({
   uniforms: {
-    uVisible: { value: 0.0 },
+    uVisible:    { value: 0.0 },
+    uFFSizeBase: { value: FF_SIZE_BASE },
+    uFFBriMin:   { value: FF_BRI_MIN },
+    uFFBriRange: { value: FF_BRI_RANGE },
   },
   vertexShader: /* glsl */`
     attribute float aBrightness;
     uniform float uVisible;
+    uniform float uFFSizeBase;
+    uniform float uFFBriMin;
+    uniform float uFFBriRange;
 
     varying float vBrightness;
 
@@ -1890,7 +2135,7 @@ const fireflyMaterial = new THREE.ShaderMaterial({
       vec4 mvPos  = modelViewMatrix * vec4(position, 1.0);
       gl_Position = projectionMatrix * mvPos;
       float dist  = max(-mvPos.z, 1.0);
-      gl_PointSize = 150.0 / dist * (2.0 + aBrightness * 6.0) * uVisible;
+      gl_PointSize = uFFSizeBase / dist * (uFFBriMin + aBrightness * uFFBriRange) * uVisible;
     }
   `,
   fragmentShader: /* glsl */`
@@ -1919,9 +2164,219 @@ const fireflyMaterial = new THREE.ShaderMaterial({
   depthWrite: false,
 });
 
-const fireflies = new THREE.Points(ffGeo, fireflyMaterial);
+function createPermanentFirefly() {
+  const zT   = Math.pow(Math.random(), 0.55);
+  const homeX = fieldMinX + Math.random() * (fieldMaxX - fieldMinX);
+  const homeZ = fieldMinZ + zT * (fieldMaxZ - fieldMinZ);
+
+  const wanderRadius = 1.2 + Math.random() * 4.5;
+  const wanderSpeed  = 0.15 + Math.random() * 0.55;
+  const heightMin    = 0.2  + Math.random() * 0.4;
+  const heightMax    = heightMin + 0.6 + Math.random() * 2.2;
+  const heightSpeed  = 0.08 + Math.random() * 0.18;
+  const glowSize     = 5.0  + Math.random() * 10.0;
+
+  return {
+    homeX, homeZ,
+    x: homeX, y: heightMin + Math.random() * (heightMax - heightMin), z: homeZ,
+    wanderRadius, wanderSpeed,
+    heightMin, heightMax, heightSpeed,
+    heightPhase: Math.random() * Math.PI * 2,
+    baseGlow:      0.3 + Math.random() * 0.4,
+    breatheSpeed:  0.18 + Math.random() * 0.28,
+    breathePhase:  Math.random() * Math.PI * 2,
+    fadeState:     'on',
+    fadeTimer:     6 + Math.random() * 12,
+    fadeProgress:  0,
+    fadeDuration:  1.0,
+    brightness:    0,
+    ffInSet:       false,
+    glowSize,
+    windAccumX:  0,
+    windAccumZ:  0,
+  };
+}
+
+function createTempFirefly() {
+  return {
+    homeX: 0, homeZ: 0,
+    x: 0, y: 0, z: 0,
+    wanderRadius: 1.5 + Math.random() * 2.0,
+    wanderSpeed:  0.3  + Math.random() * 0.4,
+    heightMin: 0.3, heightMax: 2.5,
+    heightSpeed: 0.2 + Math.random() * 0.2,
+    heightPhase: Math.random() * Math.PI * 2,
+    baseGlow: 0.7,
+    breatheSpeed: 0.4,
+    breathePhase: Math.random() * Math.PI * 2,
+    fadeState: 'on',
+    fadeTimer: 999,
+    fadeProgress: 0,
+    brightness: 0,
+    ffInSet:    false,
+    windAccumX: 0,
+    windAccumZ: 0,
+    isTemp:   true,
+    active:   false,
+    lifespan: 0,
+    maxLife:  0,
+    repelX:   0,
+    repelZ:   0,
+  };
+}
+
+function initFireflySimulation() {
+  FIREFLY_COUNT = FIREFLY_PERMANENT + FIREFLY_TEMP;
+  ff = Array.from({ length: FIREFLY_PERMANENT }, createPermanentFirefly);
+  for (let i = 0; i < FIREFLY_TEMP; i++) {
+    ff.push(createTempFirefly());
+  }
+  ffPositions  = new Float32Array(FIREFLY_COUNT * 3);
+  ffBrightness = new Float32Array(FIREFLY_COUNT);
+  ffGeo = new THREE.BufferGeometry();
+  ffGeo.setAttribute('position',    new THREE.BufferAttribute(ffPositions,  3).setUsage(THREE.DynamicDrawUsage));
+  ffGeo.setAttribute('aBrightness', new THREE.BufferAttribute(ffBrightness, 1).setUsage(THREE.DynamicDrawUsage));
+}
+
+function reinitFireflies() {
+  if (fireflies) {
+    scene.remove(fireflies);
+    ffGeo.dispose();
+  }
+  initFireflySimulation();
+  resetFireflyGrassSlots();
+  fireflies = new THREE.Points(ffGeo, fireflyMaterial);
+  scene.add(fireflies);
+  fireflies.frustumCulled = false;
+}
+
+initFireflySimulation();
+fireflies = new THREE.Points(ffGeo, fireflyMaterial);
 scene.add(fireflies);
 fireflies.frustumCulled = false;
+
+if (devMode) {
+  const ffPanel = document.getElementById('ff-dev-panel');
+  ffPanel.style.display = 'block';
+  ffPanel.innerHTML = '';
+  const ffHeader = document.createElement('button');
+  ffHeader.type = 'button';
+  ffHeader.className = 'ff-dev-header';
+  ffHeader.setAttribute('aria-expanded', 'true');
+  const ffHeaderTitle = document.createElement('span');
+  ffHeaderTitle.textContent = 'Fireflies (dev)';
+  const ffChevron = document.createElement('span');
+  ffChevron.className = 'ff-dev-chevron';
+  ffChevron.textContent = '▼';
+  ffHeader.append(ffHeaderTitle, ffChevron);
+  const ffBody = document.createElement('div');
+  ffBody.className = 'ff-dev-body';
+  ffPanel.append(ffHeader, ffBody);
+  ffHeader.addEventListener('click', () => {
+    const collapsed = ffPanel.classList.toggle('ff-dev-collapsed');
+    ffHeader.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  });
+
+  function syncFireflyDevUniforms() {
+    fireflyMaterial.uniforms.uFFSizeBase.value = FF_SIZE_BASE;
+    fireflyMaterial.uniforms.uFFBriMin.value   = FF_BRI_MIN;
+    fireflyMaterial.uniforms.uFFBriRange.value = FF_BRI_RANGE;
+    grassMaterial.uniforms.uFFGrassFalloff.value = FF_GRASS_FALLOFF;
+    grassMaterial.uniforms.uFFGrassScale.value   = FF_GRASS_SCALE;
+  }
+
+  function addSlider(label, getVal, setVal, min, max, step) {
+    const valEl = document.createElement('div');
+    valEl.className = 'ff-dev-val';
+    const input = document.createElement('input');
+    input.type = 'range';
+    input.min = String(min);
+    input.max = String(max);
+    input.step = String(step);
+    input.value = String(getVal());
+    valEl.textContent = getVal().toFixed(step < 1 ? 2 : 0);
+    const lbl = document.createElement('label');
+    lbl.textContent = label;
+    ffBody.appendChild(lbl);
+    ffBody.appendChild(input);
+    ffBody.appendChild(valEl);
+    input.addEventListener('input', () => {
+      setVal(parseFloat(input.value));
+      valEl.textContent = getVal().toFixed(step < 1 ? 2 : 0);
+      syncFireflyDevUniforms();
+    });
+  }
+
+  addSlider('Point size', () => FF_SIZE_BASE, v => { FF_SIZE_BASE = v; }, 50, 300, 1);
+  addSlider('Brightness min', () => FF_BRI_MIN, v => { FF_BRI_MIN = v; }, 0, 5, 0.1);
+  addSlider('Brightness range', () => FF_BRI_RANGE, v => { FF_BRI_RANGE = v; }, 1, 12, 0.1);
+  addSlider('Grass light falloff', () => FF_GRASS_FALLOFF, v => { FF_GRASS_FALLOFF = v; }, 0.1, 4, 0.05);
+  addSlider('Grass light scale', () => FF_GRASS_SCALE, v => { FF_GRASS_SCALE = v; }, 0, 1, 0.01);
+  addSlider('Repel radius', () => FF_REPEL_RADIUS, v => { FF_REPEL_RADIUS = v; }, 5, 40, 1);
+  addSlider('Night delay (s)', () => FF_NIGHT_DELAY, v => { FF_NIGHT_DELAY = v; }, 0, 8, 0.1);
+
+  const permLbl = document.createElement('label');
+  permLbl.textContent = 'Permanent count';
+  ffBody.appendChild(permLbl);
+  const permInput = document.createElement('input');
+  permInput.type = 'number';
+  permInput.min = '0';
+  permInput.max = '2000';
+  permInput.step = '1';
+  permInput.value = String(FIREFLY_PERMANENT);
+  ffBody.appendChild(permInput);
+
+  const tempLbl = document.createElement('label');
+  tempLbl.textContent = 'Temp count';
+  ffBody.appendChild(tempLbl);
+  const tempInput = document.createElement('input');
+  tempInput.type = 'number';
+  tempInput.min = '0';
+  tempInput.max = '500';
+  tempInput.step = '1';
+  tempInput.value = String(FIREFLY_TEMP);
+  ffBody.appendChild(tempInput);
+
+  const reinitBtn = document.createElement('button');
+  reinitBtn.textContent = 'Reinit';
+  reinitBtn.addEventListener('click', () => {
+    FIREFLY_PERMANENT = Math.max(0, parseInt(permInput.value, 10) || 0);
+    FIREFLY_TEMP      = Math.max(0, parseInt(tempInput.value, 10) || 0);
+    permInput.value = String(FIREFLY_PERMANENT);
+    tempInput.value = String(FIREFLY_TEMP);
+    reinitFireflies();
+  });
+  ffBody.appendChild(reinitBtn);
+
+  const exportBtn = document.createElement('button');
+  exportBtn.textContent = 'Export';
+  exportBtn.addEventListener('click', async () => {
+    const exportPerm = Math.max(0, parseInt(permInput.value, 10) || 0);
+    const exportTemp = Math.max(0, parseInt(tempInput.value, 10) || 0);
+    const text = `// firefly config — paste into index.html
+const FIREFLY_PERMANENT = ${exportPerm};
+const FIREFLY_TEMP = ${exportTemp};
+const FF_SIZE_BASE = ${FF_SIZE_BASE};
+const FF_BRI_MIN = ${FF_BRI_MIN};
+const FF_BRI_RANGE = ${FF_BRI_RANGE};
+const FF_GRASS_FALLOFF = ${FF_GRASS_FALLOFF};
+const FF_GRASS_SCALE = ${FF_GRASS_SCALE};
+const FF_REPEL_RADIUS = ${FF_REPEL_RADIUS};
+const FF_NIGHT_DELAY = ${FF_NIGHT_DELAY};
+`;
+    try {
+      await navigator.clipboard.writeText(text);
+      exportBtn.textContent = 'Copied!';
+      setTimeout(() => { exportBtn.textContent = 'Export'; }, 1200);
+    } catch {
+      exportBtn.textContent = 'Copy failed';
+      setTimeout(() => { exportBtn.textContent = 'Export'; }, 1200);
+    }
+  });
+  ffBody.appendChild(exportBtn);
+
+  syncFireflyDevUniforms();
+}
 
 const clipBladeGeo = new THREE.PlaneGeometry(1, 1, 1, 3);
 clipBladeGeo.translate(0, 0.5, 0);
@@ -2177,10 +2632,9 @@ function updateFireflies(delta, elapsed, gustStrength, gustDirX, gustDirZ,
       const dx = f.x - cursorX;
       const dz = f.z - cursorZ;
       const dist2 = dx * dx + dz * dz;
-      const repelRadius = 18.0;
-      if (dist2 < repelRadius && dist2 > 0.01) {
+      if (dist2 < FF_REPEL_RADIUS && dist2 > 0.01) {
         const dist  = Math.sqrt(dist2);
-        const force = (1.0 - dist2 / repelRadius) * 2.5 * delta;
+        const force = (1.0 - dist2 / FF_REPEL_RADIUS) * 2.5 * delta;
         f.windAccumX += (dx / dist) * force;
         f.windAccumZ += (dz / dist) * force;
         f.y = Math.min(f.heightMax + 1.5, f.y + force * 0.8);
@@ -2226,15 +2680,17 @@ function updateFireflies(delta, elapsed, gustStrength, gustDirX, gustDirZ,
         if (f.fadeTimer <= 0) {
           f.fadeState    = 'fadingOut';
           f.fadeProgress = 0;
+          f.fadeDuration = 1.0 + Math.random() * 0.8;
         }
       } else if (f.fadeState === 'fadingOut') {
-        f.fadeProgress += delta / (1.0 + Math.random() * 0.8);
+        f.fadeProgress += delta / f.fadeDuration;
         if (f.fadeProgress >= 1) {
           f.fadeProgress = 1;
           f.fadeState    = 'fadingIn';
+          f.fadeDuration = 1.5 + Math.random() * 1.2;
         }
       } else if (f.fadeState === 'fadingIn') {
-        f.fadeProgress -= delta / (1.5 + Math.random() * 1.2);
+        f.fadeProgress -= delta / f.fadeDuration;
         if (f.fadeProgress <= 0) {
           f.fadeProgress = 0;
           f.fadeState    = 'on';
@@ -2341,6 +2797,7 @@ function animate() {
   }
 
   if (!sceneReady) {
+    updateCustomCursorScale();
     renderer.render(scene, camera);
     return;
   }
@@ -2414,10 +2871,15 @@ function animate() {
     u.uSunDir.value.lerpVectors(transitionFrom.sunDir,     transitionTo.sunDir,    ease);
     u.uLightMin.value = transitionFrom.lightMin + (transitionTo.lightMin - transitionFrom.lightMin) * ease;
     u.uAOMin.value    = transitionFrom.aoMin    + (transitionTo.aoMin    - transitionFrom.aoMin)    * ease;
+    u.uHazeColor.value.lerpVectors(transitionFrom.hazeColor, transitionTo.hazeColor, ease);
+    u.uFFGrassTint.value.lerpVectors(transitionFrom.ffGrassTint, transitionTo.ffGrassTint, ease);
 
     const skyNow = new THREE.Color().lerpColors(transitionFrom.sky, transitionTo.sky, ease);
     renderer.setClearColor(skyNow);
-    groundMesh.material.color.lerpColors(transitionFrom.ground, transitionTo.ground, ease);
+    groundMaterial.uniforms.uGroundNear.value.lerpColors(
+      transitionFrom.groundNear, transitionTo.groundNear, ease);
+    groundMaterial.uniforms.uGroundFar.value.lerpColors(
+      transitionFrom.groundFar, transitionTo.groundFar, ease);
 
     if (todTransitionT >= 1.0) todTransitioning = false;
   }
@@ -2434,6 +2896,7 @@ function animate() {
   fireflyMaterial.uniforms.uVisible.value = fireflyFadeT;
 
   updateCursorDirection();
+  updateCustomCursorScale();
   updateTrail();
   updateMow(safeDelta);
   if (cutDragGain && audioCtx) {
@@ -2465,23 +2928,7 @@ function animate() {
 
   updateClips(safeDelta);
 
-  const ffBrightData = [];
-  for (let i = 0; i < FIREFLY_COUNT; i++) {
-    if (ff[i].brightness > 0.01) {
-      ffBrightData.push({ x: ff[i].x, y: ff[i].y, z: ff[i].z, b: ff[i].brightness });
-    }
-  }
-  ffBrightData.sort((a, b2) => b2.b - a.b);
-  const ffLightPos = new Float32Array(12 * 3);
-  const ffLightBri = new Float32Array(12);
-  for (let i = 0; i < Math.min(12, ffBrightData.length); i++) {
-    ffLightPos[i * 3]     = ffBrightData[i].x;
-    ffLightPos[i * 3 + 1] = ffBrightData[i].y;
-    ffLightPos[i * 3 + 2] = ffBrightData[i].z;
-    ffLightBri[i]         = ffBrightData[i].b * fireflyFadeT;
-  }
-  grassMaterial.uniforms.uFFLightPos.value = ffLightPos;
-  grassMaterial.uniforms.uFFLightBri.value = ffLightBri;
+  updateFireflyGrassLights(safeDelta);
 
   grassNear.updateMatrixWorld();
   grassFar.updateMatrixWorld();
