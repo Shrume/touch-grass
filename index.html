@@ -196,8 +196,19 @@ canvas {
 }
 .ui-btn svg { width: 18px; height: 18px; pointer-events: none; }
 
-#btn-info  { bottom: 20px; left: 20px; }
-#btn-tod   { bottom: 20px; right: 20px; }
+#btn-info     { bottom: 20px; left: 20px; }
+#btn-weather  { bottom: 20px; right: 68px;
+                transition: background 0.4s, border-color 0.4s; }
+#btn-tod      { bottom: 20px; right: 20px; }
+#btn-weather.rain {
+  background: rgba(28, 40, 32, 0.55);
+  border-color: rgba(140, 180, 130, 0.35);
+  color: rgba(180, 210, 170, 0.92);
+}
+#btn-weather.rain:hover {
+  background: rgba(36, 52, 42, 0.72);
+  border-color: rgba(160, 200, 150, 0.45);
+}
 
 #info-card {
   position: fixed;
@@ -372,6 +383,15 @@ canvas {
     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <circle cx="12" cy="12" r="10"/>
     <path d="M12 16v-4"/><path d="M12 8h.01"/>
+  </svg>
+</button>
+
+<!-- Weather toggle -->
+<button class="ui-btn" id="btn-weather" aria-label="Toggle rain">
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/>
+    <path d="M16 14v6"/><path d="M8 14v6"/><path d="M12 16v6"/>
   </svg>
 </button>
 
@@ -719,13 +739,15 @@ let currentDirX = 1;
 let currentDirZ = 0;
 let currentWidth = 200;
 let gustBlend = 0.0;
-const SPRING_STIFFNESS = 1.8;
-const SPRING_DAMPING = 0.9;
+const SPRING_STIFFNESS_BASE = 1.8;
+const SPRING_STIFFNESS_RAIN = 2.4;
+const SPRING_DAMPING_BASE   = 0.9;
+const SPRING_DAMPING_RAIN   = 0.6;
 let trailSpring = 0;
 let trailSpringVel = 0;
 const TRAIL_STIFFNESS = 3.0;
 const TRAIL_DAMPING = 3.5;
-console.log('Springs:', SPRING_STIFFNESS, SPRING_DAMPING, TRAIL_STIFFNESS, TRAIL_DAMPING);
+console.log('Springs:', SPRING_STIFFNESS_BASE, SPRING_DAMPING_BASE, TRAIL_STIFFNESS, TRAIL_DAMPING);
 const gust = {
   state: 'CALM',
   calmTimer: 0,
@@ -814,6 +836,12 @@ let nightAmbienceSource = null;
 let cricketMasterGain;
 let cutDragSrc  = null;
 let cutDragGain = null;
+let rainAudioEl     = null;
+let rainAudioGain   = null;
+let rainGustGain    = null;
+let musicMasterGain = null;
+let thunderTimeout  = null;
+let thunderBuffer   = null;
 let lastSnipTime = 0;
 let lastClipTime = 0;
 let lastMouseX = 0;
@@ -934,13 +962,17 @@ function initAudio() {
   rustleFilter.connect(gainRustle);
   gainRustle.connect(rustlePanner);
 
+  musicMasterGain = audioCtx.createGain();
+  musicMasterGain.gain.value = 1.0;
+  musicMasterGain.connect(audioCtx.destination);
+
   cricketMasterGain = audioCtx.createGain();
   cricketMasterGain.gain.value = 0;
-  cricketMasterGain.connect(audioCtx.destination);
+  cricketMasterGain.connect(musicMasterGain);
 
   dayAmbienceGain = audioCtx.createGain();
   dayAmbienceGain.gain.value = 0.0;
-  dayAmbienceGain.connect(audioCtx.destination);
+  dayAmbienceGain.connect(musicMasterGain);
 
   async function loadAmbienceFiles() {
     try {
@@ -968,6 +1000,7 @@ function initAudio() {
 
   if (audioCtx.state === 'suspended') audioCtx.resume();
   initCutAudio();
+  initRainAudio();
 }
 
 function initCutAudio() {
@@ -1000,6 +1033,70 @@ function initCutAudio() {
   cutLp.connect(cutDragGain);
   cutDragGain.connect(audioCtx.destination);
   cutDragSrc.start();
+}
+
+function initRainAudio() {
+  if (!audioCtx) return;
+
+  // Ambient bed: recorded rain sample
+  rainAudioEl = new Audio('audio/rain.mp3');
+  rainAudioEl.volume = 1.0;
+  rainAudioEl.addEventListener('ended', () => {
+    rainAudioEl.currentTime = 0;
+    rainAudioEl.play().catch(() => {});
+  });
+
+  const rainAudioSrc = audioCtx.createMediaElementSource(rainAudioEl);
+  rainAudioGain = audioCtx.createGain();
+  rainAudioGain.gain.value = 0.0;
+  rainAudioSrc.connect(rainAudioGain);
+  rainAudioGain.connect(audioCtx.destination);
+
+  // Gust layer: white noise bandpass, swells with wind strength
+  const gustBufSize = Math.ceil(audioCtx.sampleRate * 0.5);
+  const gustBuf  = audioCtx.createBuffer(1, gustBufSize, audioCtx.sampleRate);
+  const gustData = gustBuf.getChannelData(0);
+  for (let i = 0; i < gustBufSize; i++) gustData[i] = Math.random() * 2 - 1;
+  const gustSrc = audioCtx.createBufferSource();
+  gustSrc.buffer = gustBuf;
+  gustSrc.loop   = true;
+
+  const gustBp = audioCtx.createBiquadFilter();
+  gustBp.type = 'bandpass'; gustBp.frequency.value = 1800; gustBp.Q.value = 0.9;
+
+  rainGustGain = audioCtx.createGain();
+  rainGustGain.gain.value = 0.0;
+  gustSrc.connect(gustBp); gustBp.connect(rainGustGain);
+  rainGustGain.connect(audioCtx.destination);
+  gustSrc.start();
+
+  fetch('audio/thunder.mp3')
+    .then(r => r.arrayBuffer())
+    .then(ab => audioCtx.decodeAudioData(ab))
+    .then(buf => { thunderBuffer = buf; })
+    .catch(e => console.warn('Thunder audio failed to load:', e));
+}
+
+function scheduleThunder() {
+  if (!isRain || !audioCtx) return;
+  const delay = 15000 + Math.random() * 35000;
+  thunderTimeout = setTimeout(fireThunder, delay);
+}
+
+function fireThunder() {
+  if (!isRain || !audioCtx || !thunderBuffer) return;
+
+  const src = audioCtx.createBufferSource();
+  src.buffer = thunderBuffer;
+
+  const gain = audioCtx.createGain();
+  gain.gain.value = 0.35 + Math.random() * 0.15;
+
+  src.connect(gain);
+  gain.connect(audioCtx.destination);
+  src.start(audioCtx.currentTime);
+
+  scheduleThunder();
 }
 
 function fireCutSnip() {
@@ -1251,10 +1348,11 @@ function updateAudioFromTrail() {
     windPanner.positionZ.value = -80 + gustProgress * 40;
   }
 
-  gainWhoosh.gain.value = audioMuted ? 0 : smoothWindActivity * 0.009;
+  const windAudioScale = 1.0 - rainT;
+  gainWhoosh.gain.value = audioMuted ? 0 : smoothWindActivity * 0.009 * windAudioScale;
   whooshFilter.frequency.value = 300 + smoothWindActivity * 250;
   whooshFilter.Q.value = 0.5;
-  gainRustle.gain.value = audioMuted ? 0 : smoothWindActivity * 0.072;
+  gainRustle.gain.value = audioMuted ? 0 : smoothWindActivity * 0.072 * windAudioScale;
   rustleFilter.frequency.value = 2400 + smoothWindActivity * 1600;
   rustleFilter.Q.value = 2.5 + smoothWindActivity * 1.5;
 }
@@ -1431,6 +1529,7 @@ uniform float uFieldInvW;
 uniform float uFieldInvD;
 uniform sampler2D uMowMap;
 uniform float uCutHeight;
+uniform float uHazeDensity;
 
 attribute float aHeight;
 attribute float aWidth;
@@ -1551,6 +1650,23 @@ void main() {
   worldPos.x += ambWindX * uAmbientDirX;
   worldPos.z += ambWindX * uAmbientDirZ;
 
+  // Rain impact tremor — independent per-blade raindrop hits
+  // Each blade has its own tick schedule; ~15% of ticks fire as a hit
+  if (uHazeDensity > 0.001) {
+    float tickRate  = 5.0;
+    float tickPhase = t * tickRate + rPhase * 3.0;
+    float tickFloor = floor(tickPhase);
+    float tickFrac  = fract(tickPhase);
+    float tickRand  = fract(sin(tickFloor * 127.1 + aRandom * 311.7) * 43758.5);
+    float isHit     = step(0.90, tickRand); // ~10% hit rate — mostly still, occasional tap
+    // gradual lean-in, full decay within one tick so no carry-over to next
+    float impact    = isHit * exp(-tickFrac * 2.5) * (1.0 - exp(-tickFrac * 4.0));
+    float impactAngle = aRandom * 6.2832;
+    float impactDisp  = impact * uHazeDensity * 0.38 * aHeight * windStrength;
+    worldPos.x += impactDisp * cos(impactAngle);
+    worldPos.z += impactDisp * sin(impactAngle);
+  }
+
   vWorldPos = worldPos.xyz;
 
   vCursorBend = pow(trailIntensity, 3.5);
@@ -1577,6 +1693,9 @@ uniform vec3 uBentTipHi;
 uniform float uFieldMinZ;
 uniform float uFieldMaxZ;
 uniform vec3 uHazeColor;
+uniform float uHazeDensity;
+uniform vec3  uRainFogColor;
+uniform float uRainFogStrength;
 varying vec2 vUv;
 varying float vRandom;
 varying vec2 vWorldNormal;
@@ -1619,7 +1738,13 @@ void main() {
   col += uSpecColor * specular;
 
   float depthT = clamp((vWorldPos.z - uFieldMinZ) / (uFieldMaxZ - uFieldMinZ), 0.0, 1.0);
-  col = mix(uHazeColor, col, 0.55 + depthT * 0.45);
+  float hazeNear = 0.55 - uHazeDensity * 0.30;
+  float hazeFar  = 0.45 - uHazeDensity * 0.10;
+  col = mix(uHazeColor, col, clamp(hazeNear + depthT * hazeFar, 0.0, 1.0));
+
+  // Rain fog: bleaches far field to grey-white veil (depthT=0 is far)
+  float rainFog = uRainFogStrength * pow(clamp(1.0 - depthT, 0.0, 1.0), 1.8);
+  col = mix(col, uRainFogColor, rainFog);
 
   float cutAmt = clamp((vMow - 0.35) * (1.0 / 0.2), 0.0, 1.0);
   if (cutAmt > 0.001) {
@@ -1674,6 +1799,9 @@ const grassMaterial = new THREE.ShaderMaterial({
     uBentTipLo:       { value: new THREE.Color(65 / 255, 118 / 255, 40 / 255) },
     uBentTipHi:       { value: new THREE.Color(90 / 255, 152 / 255, 58 / 255) },
     uHazeColor:       { value: new THREE.Vector3(0.13, 0.22, 0.09) },
+    uHazeDensity:     { value: 0.0 },
+    uRainFogColor:    { value: new THREE.Vector3(0.72, 0.75, 0.68) },
+    uRainFogStrength: { value: 0.0 },
   },
 });
 
@@ -1837,11 +1965,16 @@ uniform float uFieldMinZ;
 uniform float uFieldMaxZ;
 uniform vec3 uGroundNear;
 uniform vec3 uGroundFar;
+uniform vec3  uRainFogColor;
+uniform float uRainFogStrength;
 varying float vWorldZ;
 
 void main() {
   float depthT = clamp((vWorldZ - uFieldMinZ) / (uFieldMaxZ - uFieldMinZ), 0.0, 1.0);
-  gl_FragColor = vec4(mix(uGroundFar, uGroundNear, depthT), 1.0);
+  vec3 col = mix(uGroundFar, uGroundNear, depthT);
+  float rainFog = uRainFogStrength * pow(clamp(1.0 - depthT, 0.0, 1.0), 1.8);
+  col = mix(col, uRainFogColor, rainFog);
+  gl_FragColor = vec4(col, 1.0);
 }
 `;
 
@@ -1851,8 +1984,10 @@ const groundMaterial = new THREE.ShaderMaterial({
   uniforms: {
     uFieldMinZ:  { value: fieldMinZ },
     uFieldMaxZ:  { value: fieldMaxZ },
-    uGroundNear: { value: new THREE.Color().setRGB(0.039, 0.078, 0.024) },
-    uGroundFar:  { value: new THREE.Color().setRGB(0.082, 0.149, 0.055) },
+    uGroundNear:      { value: new THREE.Color().setRGB(0.039, 0.078, 0.024) },
+    uGroundFar:       { value: new THREE.Color().setRGB(0.082, 0.149, 0.055) },
+    uRainFogColor:    { value: new THREE.Vector3(0.72, 0.75, 0.68) },
+    uRainFogStrength: { value: 0.0 },
   },
 });
 
@@ -1866,6 +2001,73 @@ ground.frustumCulled = false;
 scene.add(ground);
 const groundMesh = ground;
 
+
+const SUNNY_DAY = {
+  sky:        new THREE.Color(0x0d1a09),
+  groundNear: new THREE.Color().setRGB(0.039, 0.078, 0.024),
+  groundFar:  new THREE.Color().setRGB(0.082, 0.149, 0.055),
+  hazeColor:  new THREE.Vector3(0.13, 0.22, 0.09),
+  baseColor:  new THREE.Color().setRGB(58/255, 100/255, 40/255),
+  midColor:   new THREE.Color().setRGB(78/255, 130/255, 48/255),
+  tipPale:    new THREE.Color().setRGB(168/255, 216/255, 96/255),
+  tipBright:  new THREE.Color().setRGB(194/255, 232/255, 112/255),
+  specColor:  new THREE.Vector3(0.9, 1.0, 0.7),
+  lightMin:   0.62,
+  aoMin:      0.32,
+  sunDir:     new THREE.Vector2(0.8, 0.6),
+};
+
+const SUNNY_NIGHT = {
+  sky:        new THREE.Color(3/255, 5/255, 12/255),
+  groundNear: new THREE.Color(0x03050c),
+  groundFar:  new THREE.Color().setRGB(0.078, 0.135, 0.207),
+  hazeColor:  new THREE.Vector3(0.08, 0.10, 0.18),
+  baseColor:  new THREE.Color().setRGB(22/255, 38/255, 58/255),
+  midColor:   new THREE.Color().setRGB(32/255, 54/255, 84/255),
+  tipPale:    new THREE.Color().setRGB(58/255, 98/255, 148/255),
+  tipBright:  new THREE.Color().setRGB(72/255, 120/255, 172/255),
+  specColor:  new THREE.Vector3(0.18, 0.22, 0.45),
+  lightMin:   0.35,
+  aoMin:      0.08,
+  sunDir:     new THREE.Vector2(0.3, 0.15),
+};
+
+const RAIN_DAY = {
+  sky:        new THREE.Color(0x111a0f),
+  groundNear: new THREE.Color(0x0a1209),
+  groundFar:  new THREE.Color(0x1a2416),
+  hazeColor:  new THREE.Vector3(0.12, 0.15, 0.10),
+  baseColor:  new THREE.Color().setRGB(42/255,  72/255,  28/255),
+  midColor:   new THREE.Color().setRGB(56/255,  88/255,  38/255),
+  tipPale:    new THREE.Color().setRGB(110/255, 148/255, 72/255),
+  tipBright:  new THREE.Color().setRGB(128/255, 165/255, 84/255),
+  specColor:  new THREE.Vector3(0.55, 0.62, 0.45),
+  lightMin:   0.44,
+  aoMin:      0.22,
+  sunDir:     new THREE.Vector2(0.5, 0.35),
+  streakColor: new THREE.Vector3(0.55, 0.62, 0.52),
+};
+
+const RAIN_NIGHT = {
+  sky:        new THREE.Color(0x020408),
+  groundNear: new THREE.Color(0x020408),
+  groundFar:  new THREE.Color(0x0d1820),
+  hazeColor:  new THREE.Vector3(0.07, 0.09, 0.12),
+  baseColor:  new THREE.Color().setRGB(14/255,  24/255,  32/255),
+  midColor:   new THREE.Color().setRGB(20/255,  34/255,  46/255),
+  tipPale:    new THREE.Color().setRGB(30/255,  52/255,  72/255),
+  tipBright:  new THREE.Color().setRGB(38/255,  62/255,  86/255),
+  specColor:  new THREE.Vector3(0.10, 0.13, 0.22),
+  lightMin:   0.22,
+  aoMin:      0.06,
+  sunDir:     new THREE.Vector2(0.2, 0.10),
+  streakColor: new THREE.Vector3(0.18, 0.24, 0.32),
+};
+
+SUNNY_DAY.sunDir.normalize();
+SUNNY_NIGHT.sunDir.normalize();
+RAIN_DAY.sunDir.normalize();
+RAIN_NIGHT.sunDir.normalize();
 
 const DAY_SNAPSHOT = {
   base:      grassMaterial.uniforms.uBaseColor.value.clone(),
@@ -1887,6 +2089,13 @@ const DAY_SNAPSHOT = {
 };
 
 let isNight = false;
+let todT = 0.0;
+
+let isRain            = false;
+let rainT             = 0.0;
+let rainTransitioning = false;
+let rainTransStart    = 0;
+const RAIN_TRANS_DUR  = 2000;
 
 let todTransitioning  = false;
 let todTransitionT    = 1.0;
@@ -1960,10 +2169,133 @@ function crossfadeToDay() {
 }
 
 function updateBtnTOD() {
-  const btns = document.querySelectorAll('.ui-btn');
-  btns.forEach(b => b.classList.toggle('night', isNight));
+  document.getElementById('btn-tod').classList.toggle('night', isNight);
+  document.getElementById('btn-info').classList.toggle('night', isNight);
   document.getElementById('info-card')
     .classList.toggle('night', isNight);
+}
+
+function updateBtnWeather() {
+  document.getElementById('btn-weather').classList.toggle('rain', isRain);
+}
+
+const _wSunny = new THREE.Color();
+const _wRain  = new THREE.Color();
+const _wFinal = new THREE.Color();
+const _wVecSunny = new THREE.Vector3();
+const _wVecRain  = new THREE.Vector3();
+const _wSunSunny = new THREE.Vector2();
+const _wSunRain  = new THREE.Vector2();
+const _rainFogDay   = new THREE.Vector3(0.38, 0.42, 0.34);
+const _rainFogNight = new THREE.Vector3(0.28, 0.32, 0.42);
+
+function applyWeather() {
+  const t = todT;
+  const r = rainT;
+  const u = grassMaterial.uniforms;
+
+  _wSunny.lerpColors(SUNNY_DAY.sky, SUNNY_NIGHT.sky, t);
+  _wRain.lerpColors(RAIN_DAY.sky, RAIN_NIGHT.sky, t);
+  _wFinal.lerpColors(_wSunny, _wRain, r);
+  renderer.setClearColor(_wFinal);
+
+  _wSunny.lerpColors(SUNNY_DAY.groundNear, SUNNY_NIGHT.groundNear, t);
+  _wRain.lerpColors(RAIN_DAY.groundNear, RAIN_NIGHT.groundNear, t);
+  groundMaterial.uniforms.uGroundNear.value.lerpColors(_wSunny, _wRain, r);
+
+  _wSunny.lerpColors(SUNNY_DAY.groundFar, SUNNY_NIGHT.groundFar, t);
+  _wRain.lerpColors(RAIN_DAY.groundFar, RAIN_NIGHT.groundFar, t);
+  groundMaterial.uniforms.uGroundFar.value.lerpColors(_wSunny, _wRain, r);
+
+  _wVecSunny.lerpVectors(SUNNY_DAY.hazeColor, SUNNY_NIGHT.hazeColor, t);
+  _wVecRain.lerpVectors(RAIN_DAY.hazeColor, RAIN_NIGHT.hazeColor, t);
+  u.uHazeColor.value.lerpVectors(_wVecSunny, _wVecRain, r);
+
+  _wSunny.lerpColors(SUNNY_DAY.baseColor, SUNNY_NIGHT.baseColor, t);
+  _wRain.lerpColors(RAIN_DAY.baseColor, RAIN_NIGHT.baseColor, t);
+  _wFinal.lerpColors(_wSunny, _wRain, r);
+  u.uBaseColor.value.set(_wFinal.r, _wFinal.g, _wFinal.b);
+
+  _wSunny.lerpColors(SUNNY_DAY.midColor, SUNNY_NIGHT.midColor, t);
+  _wRain.lerpColors(RAIN_DAY.midColor, RAIN_NIGHT.midColor, t);
+  _wFinal.lerpColors(_wSunny, _wRain, r);
+  u.uMidColor.value.set(_wFinal.r, _wFinal.g, _wFinal.b);
+
+  _wSunny.lerpColors(SUNNY_DAY.tipPale, SUNNY_NIGHT.tipPale, t);
+  _wRain.lerpColors(RAIN_DAY.tipPale, RAIN_NIGHT.tipPale, t);
+  _wFinal.lerpColors(_wSunny, _wRain, r);
+  u.uTipPale.value.set(_wFinal.r, _wFinal.g, _wFinal.b);
+
+  _wSunny.lerpColors(SUNNY_DAY.tipBright, SUNNY_NIGHT.tipBright, t);
+  _wRain.lerpColors(RAIN_DAY.tipBright, RAIN_NIGHT.tipBright, t);
+  _wFinal.lerpColors(_wSunny, _wRain, r);
+  u.uTipBright.value.set(_wFinal.r, _wFinal.g, _wFinal.b);
+
+  _wVecSunny.lerpVectors(SUNNY_DAY.specColor, SUNNY_NIGHT.specColor, t);
+  _wVecRain.lerpVectors(RAIN_DAY.specColor, RAIN_NIGHT.specColor, t);
+  u.uSpecColor.value.lerpVectors(_wVecSunny, _wVecRain, r);
+
+  const sunnyLight = SUNNY_DAY.lightMin + (SUNNY_NIGHT.lightMin - SUNNY_DAY.lightMin) * t;
+  const rainLight  = RAIN_DAY.lightMin  + (RAIN_NIGHT.lightMin  - RAIN_DAY.lightMin)  * t;
+  u.uLightMin.value = sunnyLight + (rainLight - sunnyLight) * r;
+
+  const sunnyAO = SUNNY_DAY.aoMin + (SUNNY_NIGHT.aoMin - SUNNY_DAY.aoMin) * t;
+  const rainAO  = RAIN_DAY.aoMin  + (RAIN_NIGHT.aoMin  - RAIN_DAY.aoMin)  * t;
+  u.uAOMin.value = sunnyAO + (rainAO - sunnyAO) * r;
+
+  _wSunSunny.lerpVectors(SUNNY_DAY.sunDir, SUNNY_NIGHT.sunDir, t);
+  _wSunRain.lerpVectors(RAIN_DAY.sunDir, RAIN_NIGHT.sunDir, t);
+  u.uSunDir.value.lerpVectors(_wSunSunny, _wSunRain, r);
+  u.uSunDir.value.normalize();
+
+  u.uHazeDensity.value = r;
+
+  // Rain fog — bleaches far field; sunny strength = 0, rain strength lerps day↔night
+  _wVecSunny.lerpVectors(SUNNY_DAY.hazeColor, SUNNY_NIGHT.hazeColor, t);
+  _wVecRain.lerpVectors(_rainFogDay, _rainFogNight, t);
+  u.uRainFogColor.value.lerpVectors(_wVecSunny, _wVecRain, r);
+  groundMaterial.uniforms.uRainFogColor.value.lerpVectors(_wVecSunny, _wVecRain, r);
+  const rainFogStr = (0.72 + (0.65 - 0.72) * t) * r;
+  u.uRainFogStrength.value = rainFogStr;
+  groundMaterial.uniforms.uRainFogStrength.value = rainFogStr;
+
+  _wSunny.lerpColors(SUNNY_DAY.sky, SUNNY_NIGHT.sky, t);
+  _wVecRain.lerpVectors(RAIN_DAY.streakColor, RAIN_NIGHT.streakColor, t);
+  _wVecSunny.set(_wSunny.r, _wSunny.g, _wSunny.b);
+  rainMat.uniforms.uRainColor.value.lerpVectors(_wVecSunny, _wVecRain, r);
+  rainMat.uniforms.uRainT.value = r;
+
+  // Raindrop rebound color: day-rain = light grey-white, night-rain = dim blue-silver
+  _wVecSunny.set(0.82, 0.88, 0.82); // day rain
+  _wVecRain.set(0.55, 0.62, 0.78);  // night rain — brighter blue-silver
+  clipMat.uniforms.uRainDropColor.value.lerpVectors(_wVecSunny, _wVecRain, t);
+}
+
+function toggleWeather() {
+  isRain = !isRain;
+  rainTransitioning = true;
+  rainTransStart = performance.now();
+  updateBtnWeather();
+
+  if (isRain) {
+    scheduleThunder();
+    if (rainAudioEl) {
+      const startRainAudio = () => {
+        if (rainAudioEl.paused) {
+          rainAudioEl.currentTime = 0;
+          rainAudioEl.play().catch(() => {});
+        }
+      };
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume().then(startRainAudio);
+      } else {
+        startRainAudio();
+      }
+    }
+  } else {
+    clearTimeout(thunderTimeout);
+    thunderTimeout = null;
+  }
 }
 
 function applyTOD() {
@@ -2020,11 +2352,193 @@ function applyTOD() {
     crossfadeToDay();
   }
   updateBtnTOD();
+  applyWeather();
 }
 
 scene.add(grassNear);
 scene.add(grassFar);
 scene.add(grassVeryFar);
+
+// ── Rain streaks ─────────────────────────────────────────────────────────────
+const RAIN_COUNT = 50000;
+const hw = 0.010;
+const hh = 0.42;
+
+const rainGeo = new THREE.BufferGeometry();
+rainGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+  -hw, -hh, 0,   hw, -hh, 0,   hw,  hh, 0,
+  -hw, -hh, 0,   hw,  hh, 0,  -hw,  hh, 0,
+]), 3));
+
+const rainPosArr   = new Float32Array(RAIN_COUNT * 3);
+const rainSpeedArr = new Float32Array(RAIN_COUNT);
+const rainAlphaArr = new Float32Array(RAIN_COUNT);
+const rainLenArr   = new Float32Array(RAIN_COUNT);
+
+const rainPosBuf = new THREE.InstancedBufferAttribute(rainPosArr, 3)
+  .setUsage(THREE.DynamicDrawUsage);
+const rainSpeedBuf = new THREE.InstancedBufferAttribute(rainSpeedArr, 1)
+  .setUsage(THREE.DynamicDrawUsage);
+const rainAlphaBuf = new THREE.InstancedBufferAttribute(rainAlphaArr, 1)
+  .setUsage(THREE.DynamicDrawUsage);
+const rainLenBuf = new THREE.InstancedBufferAttribute(rainLenArr, 1)
+  .setUsage(THREE.DynamicDrawUsage);
+
+rainGeo.setAttribute('aRainPos', rainPosBuf);
+rainGeo.setAttribute('aRainSpeed', rainSpeedBuf);
+rainGeo.setAttribute('aRainAlpha', rainAlphaBuf);
+rainGeo.setAttribute('aRainLen', rainLenBuf);
+
+function initRainInstance(i) {
+  rainPosArr[i * 3]     = fieldMinX + Math.random() * (fieldMaxX - fieldMinX);
+  rainPosArr[i * 3 + 1] = -2.0 + Math.random() * 34.0;
+  rainPosArr[i * 3 + 2] = fieldMinZ + Math.random() * (fieldMaxZ - fieldMinZ);
+  rainSpeedArr[i] = 0.80 + Math.random() * 0.40;
+  rainAlphaArr[i] = 0.28 + Math.random() * 0.32;
+  rainLenArr[i]   = 0.4 + Math.pow(Math.random(), 2.0) * 1.2;
+}
+
+for (let i = 0; i < RAIN_COUNT; i++) initRainInstance(i);
+
+const rainVertSrc = /* glsl */`
+uniform float uRainT;
+uniform float uFieldMinZ;
+uniform float uFieldDepth;
+
+attribute vec3  aRainPos;
+attribute float aRainSpeed;
+attribute float aRainAlpha;
+attribute float aRainLen;
+
+varying float vAlpha;
+varying float vDepthT;
+
+// Geometry constants matching the JS quad definition
+const float HW = 0.010;
+const float HH = 0.42;
+
+// Fixed fall direction — slight forward tilt toward camera, no wind lean
+const vec3 FALL_DIR = vec3(0.0, 1.0, 0.08);
+
+void main() {
+  // depthT: 0 = horizon (far), 1 = near
+  float depthT    = clamp((aRainPos.z - uFieldMinZ) / uFieldDepth, 0.0, 1.0);
+  float perspScale = 0.35 + depthT * 0.65;
+
+  // World-space half-length of this streak's centerline
+  float halfLen = HH * aRainLen * perspScale;
+
+  // World-space top and bottom of the streak centerline
+  vec3 wBottom = aRainPos - FALL_DIR * halfLen;
+  vec3 wTop    = aRainPos + FALL_DIR * halfLen;
+
+  // Project both endpoints through the full MVP
+  mat4 mvp  = projectionMatrix * modelViewMatrix;
+  vec4 cBot = mvp * vec4(wBottom, 1.0);
+  vec4 cTop = mvp * vec4(wTop,    1.0);
+
+  // Interpolate along the centerline: t=0 → bottom vertex, t=1 → top vertex
+  float t   = 0.5 + position.y / (2.0 * HH);
+  vec4 cPos = mix(cBot, cTop, t);
+
+  // Screen-space streak direction in NDC, then corrected to pixel space so that
+  // the perpendicular width is measured in viewport-HEIGHT units (not width).
+  // This decouples streak thickness from window width changes.
+  float aspect = projectionMatrix[1][1] / projectionMatrix[0][0];
+  vec2 ndcBot  = cBot.xy / cBot.w;
+  vec2 ndcTop  = cTop.xy / cTop.w;
+  vec2 axis    = ndcTop - ndcBot;
+
+  // Convert axis to pixel space, normalize there, take CW perpendicular
+  vec2 axisP   = vec2(axis.x * aspect, axis.y);
+  float axisLen = length(axisP);
+  if (axisLen > 1e-4) { axisP /= axisLen; } else { axisP = vec2(0.0, 1.0); }
+  vec2 perpP   = vec2(axisP.y, -axisP.x);   // 90° CW in pixel space
+
+  // Convert perpendicular back to NDC — result is in NDC-height units
+  vec2 perp    = vec2(perpP.x / aspect, perpP.y);
+
+  // Width as a fraction of viewport height → stays thin at any window size
+  // far: ~1.2 px/side; near: ~2 px/side on 1080p
+  float ndcHalfH = 0.0012 + depthT * 0.0008;
+  float clipHw   = ndcHalfH * cPos.w;
+  gl_Position    = cPos + vec4(perp * clipHw * (position.x / HW), 0.0, 0.0);
+
+  vDepthT = depthT;
+  vAlpha  = aRainAlpha * uRainT;
+}
+`;
+
+const rainFragSrc = /* glsl */`
+uniform vec3 uRainColor;
+
+varying float vAlpha;
+varying float vDepthT;
+
+void main() {
+  // near streaks crisper; far streaks dim + haze away
+  float hazeFade  = clamp(0.05 + vDepthT * 0.95, 0.0, 1.0);
+  float depthAlpha = 0.3 + vDepthT * 0.7;
+  gl_FragColor = vec4(uRainColor, vAlpha * hazeFade * depthAlpha);
+}
+`;
+
+const rainMat = new THREE.ShaderMaterial({
+  vertexShader: rainVertSrc,
+  fragmentShader: rainFragSrc,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+  uniforms: {
+    uRainT:       { value: 0.0 },
+    uRainColor:   { value: new THREE.Vector3(0.55, 0.62, 0.52) },
+    uFieldMinZ:   { value: fieldMinZ },
+    uFieldDepth:  { value: fieldMaxZ - fieldMinZ },
+  },
+});
+
+const rainMesh = new THREE.InstancedMesh(rainGeo, rainMat, RAIN_COUNT);
+rainMesh.frustumCulled = false;
+rainMesh.renderOrder = 10;
+scene.add(rainMesh);
+
+function updateRain(delta) {
+  if (rainT === 0.0) return;
+
+  const fallSpeed = 16.0;
+
+  rainMat.uniforms.uRainT.value = rainT;
+
+  const dy = fallSpeed * delta;
+  const fieldW = fieldMaxX - fieldMinX;
+  const fieldD = fieldMaxZ - fieldMinZ;
+
+  for (let i = 0; i < RAIN_COUNT; i++) {
+    const depthT = Math.min(1, Math.max(0, (rainPosArr[i * 3 + 2] - fieldMinZ) / fieldD));
+    const speed = dy * rainSpeedArr[i] * (0.6 + depthT * 0.9);
+    rainPosArr[i * 3 + 1] -= speed;
+
+    if (rainPosArr[i * 3 + 1] < -1.0) {
+      rainPosArr[i * 3]     = fieldMinX + Math.random() * fieldW;
+      rainPosArr[i * 3 + 1] = 28.0 + Math.random() * 6.0;
+      rainPosArr[i * 3 + 2] = fieldMinZ + Math.random() * fieldD;
+    }
+  }
+
+  rainPosBuf.needsUpdate = true;
+
+  // Rebound splashes — tiny drops popping off the canopy surface
+  const spawnCount = Math.floor(rainT * (20 + Math.random() * 20));
+  for (let s = 0; s < spawnCount; s++) {
+    spawnRainDrop(
+      fieldMinX + Math.random() * fieldW,
+      fieldMinZ + Math.random() * fieldD,
+      (Math.random() - 0.5) * 0.8,
+      2.5 + Math.random() * 2.5,
+      (Math.random() - 0.5) * 0.8
+    );
+  }
+}
 
 let ffPositions;
 let ffBrightness;
@@ -2433,22 +2947,26 @@ const clipMat = new THREE.ShaderMaterial({
   uniforms: {
     projectionMatrix: { value: camera.projectionMatrix },
     modelViewMatrix:  { value: new THREE.Matrix4() },
-    uBaseColor:  grassMaterial.uniforms.uBaseColor,
-    uMidColor:   grassMaterial.uniforms.uMidColor,
-    uTipPale:    grassMaterial.uniforms.uTipPale,
-    uTipBright:  grassMaterial.uniforms.uTipBright,
-    uAOMin:      grassMaterial.uniforms.uAOMin,
+    uBaseColor:      grassMaterial.uniforms.uBaseColor,
+    uMidColor:       grassMaterial.uniforms.uMidColor,
+    uTipPale:        grassMaterial.uniforms.uTipPale,
+    uTipBright:      grassMaterial.uniforms.uTipBright,
+    uAOMin:          grassMaterial.uniforms.uAOMin,
+    uRainDropColor:  { value: new THREE.Vector3(0.72, 0.78, 0.72) },
   },
   vertexShader: /* glsl */`
     attribute float aClipHeight;
     attribute float aClipWidth;
     attribute float aClipLean;
     attribute float aClipAlpha;
+    attribute float aClipIsRain;
     varying vec2  vUv;
     varying float vAlpha;
+    varying float vIsRain;
     void main() {
-      vUv   = uv;
-      vAlpha = aClipAlpha;
+      vUv     = uv;
+      vAlpha  = aClipAlpha;
+      vIsRain = aClipIsRain;
       vec3 pos = position;
       pos.x *= aClipWidth;
       pos.y *= aClipHeight;
@@ -2464,15 +2982,22 @@ const clipMat = new THREE.ShaderMaterial({
     uniform vec3  uTipPale;
     uniform vec3  uTipBright;
     uniform float uAOMin;
+    uniform vec3  uRainDropColor;
     varying vec2  vUv;
     varying float vAlpha;
+    varying float vIsRain;
     void main() {
-      vec3 col = uBaseColor;
-      col = mix(col, uMidColor,  smoothstep(0.35, 0.50, vUv.y));
-      col = mix(col, uTipPale,   smoothstep(0.70, 0.85, vUv.y));
-      col = mix(col, uTipBright, smoothstep(0.85, 1.00, vUv.y));
-      float ao = smoothstep(0.0, 0.25, vUv.y);
-      col *= (uAOMin + (1.0 - uAOMin) * ao);
+      vec3 col;
+      if (vIsRain > 0.5) {
+        col = uRainDropColor;
+      } else {
+        col = uBaseColor;
+        col = mix(col, uMidColor,  smoothstep(0.35, 0.50, vUv.y));
+        col = mix(col, uTipPale,   smoothstep(0.70, 0.85, vUv.y));
+        col = mix(col, uTipBright, smoothstep(0.85, 1.00, vUv.y));
+        float ao = smoothstep(0.0, 0.25, vUv.y);
+        col *= (uAOMin + (1.0 - uAOMin) * ao);
+      }
       if (vAlpha < 0.01) discard;
       gl_FragColor = vec4(col, vAlpha);
     }
@@ -2488,6 +3013,7 @@ const clipHeightArr = new Float32Array(CLIP_COUNT);
 const clipWidthArr  = new Float32Array(CLIP_COUNT);
 const clipLeanArr   = new Float32Array(CLIP_COUNT);
 const clipAlphaArr  = new Float32Array(CLIP_COUNT);
+const clipIsRainArr = new Float32Array(CLIP_COUNT);
 
 clipBladeGeo.setAttribute('aClipHeight',
   new THREE.InstancedBufferAttribute(clipHeightArr, 1).setUsage(THREE.DynamicDrawUsage));
@@ -2497,6 +3023,8 @@ clipBladeGeo.setAttribute('aClipLean',
   new THREE.InstancedBufferAttribute(clipLeanArr,   1).setUsage(THREE.DynamicDrawUsage));
 clipBladeGeo.setAttribute('aClipAlpha',
   new THREE.InstancedBufferAttribute(clipAlphaArr,  1).setUsage(THREE.DynamicDrawUsage));
+clipBladeGeo.setAttribute('aClipIsRain',
+  new THREE.InstancedBufferAttribute(clipIsRainArr, 1).setUsage(THREE.DynamicDrawUsage));
 
 const clipMesh = new THREE.InstancedMesh(clipBladeGeo, clipMat, CLIP_COUNT);
 clipMesh.frustumCulled = false;
@@ -2513,6 +3041,7 @@ const clips = Array.from({ length: CLIP_COUNT }, () => ({
   tiltX: 0, tiltZ: 0,
   age: 0, maxAge: 0,
   height: 0, width: 0, lean: 0,
+  isRain: false,
 }));
 let clipIdx = 0;
 const activeClips = [];
@@ -2532,6 +3061,7 @@ function spawnClips(wx, wz, fraction) {
     const r     = Math.random() * brushRadius;
 
     c.active  = true;
+    c.isRain  = false;
     if (!wasActive) activeClips.push(idx);
     c.x       = wx + Math.cos(angle) * r;
     c.z       = wz + Math.sin(angle) * r;
@@ -2553,6 +3083,32 @@ function spawnClips(wx, wz, fraction) {
     c.age     = 0;
     c.maxAge  = 0.6 + Math.random() * 0.6;
   }
+}
+
+function spawnRainDrop(rx, rz, vx, vy, vz) {
+  const idx = clipIdx % CLIP_COUNT;
+  const c   = clips[idx];
+  const wasActive = c.active;
+  clipIdx++;
+
+  c.active  = true;
+  c.isRain  = true;
+  if (!wasActive) activeClips.push(idx);
+
+  // Spawn at canopy height so drops aren't hidden below grass blades
+  c.x = rx; c.y = 0.4 + Math.random() * 0.5; c.z = rz;
+  c.velX = vx; c.velY = vy; c.velZ = vz;
+  c.rotY    = Math.random() * Math.PI * 2;
+  c.rotVelY = (Math.random() - 0.5) * 4;
+  // Random tilt so planes aren't edge-on to the downward camera
+  c.tiltX   = (Math.random() - 0.5) * 1.2;
+  c.tiltZ   = (Math.random() - 0.5) * 1.2;
+  c.age     = 0;
+  c.maxAge  = 0.12 + Math.random() * 0.10;
+  // Large enough to be visible from camera at Y=18
+  c.height  = 0.07 + Math.random() * 0.05;
+  c.width   = 0.05 + Math.random() * 0.04;
+  c.lean    = 0;
 }
 
 // ── Resize ──────────────────────────────────────────────────────────────────
@@ -2605,6 +3161,8 @@ document.addEventListener('click', (e) => {
   }
 });
 
+document.getElementById('btn-weather').addEventListener('click', toggleWeather);
+
 document.getElementById('btn-tod').addEventListener('click', () => {
   isNight = !isNight;
   applyTOD();
@@ -2613,6 +3171,7 @@ document.getElementById('btn-tod').addEventListener('click', () => {
 });
 
 updateBtnTOD();
+applyWeather();
 
 const clock = new THREE.Clock();
 
@@ -2631,6 +3190,10 @@ camera.updateProjectionMatrix();
 
 function updateFireflies(delta, elapsed, gustStrength, gustDirX, gustDirZ,
                           cursorX, cursorZ, cursorSpeed, cursorOnGrass) {
+  if (rainT > 0.5) {
+    fireflyFadeT = Math.max(0, fireflyFadeT - delta * 2.0);
+    return;
+  }
   if (fireflyFadeT === 0.0 && !isNight) return;
 
   const spawnThreshold = 4.0;
@@ -2796,6 +3359,7 @@ function updateClips(delta) {
     clipHeightArr[i] = c.height;
     clipWidthArr[i]  = c.width;
     clipLeanArr[i]   = c.lean;
+    clipIsRainArr[i] = c.isRain ? 1.0 : 0.0;
 
     _cd.position.set(c.x, Math.max(0, c.y), c.z);
     _cd.rotation.set(c.tiltX, c.rotY, c.tiltZ);
@@ -2806,10 +3370,11 @@ function updateClips(delta) {
 
   if (activeClips.length > 0) {
     clipMesh.instanceMatrix.needsUpdate = true;
-    clipBladeGeo.attributes.aClipHeight.needsUpdate = true;
-    clipBladeGeo.attributes.aClipWidth.needsUpdate  = true;
-    clipBladeGeo.attributes.aClipLean.needsUpdate   = true;
-    clipBladeGeo.attributes.aClipAlpha.needsUpdate  = true;
+    clipBladeGeo.attributes.aClipHeight.needsUpdate  = true;
+    clipBladeGeo.attributes.aClipWidth.needsUpdate   = true;
+    clipBladeGeo.attributes.aClipLean.needsUpdate    = true;
+    clipBladeGeo.attributes.aClipAlpha.needsUpdate   = true;
+    clipBladeGeo.attributes.aClipIsRain.needsUpdate  = true;
   }
 }
 
@@ -2857,10 +3422,12 @@ function animate() {
 
   updateGust(safeDelta);
 
-  const springTarget = gust.strength;
-  const springForce = (springTarget - springPos) * SPRING_STIFFNESS;
-  // High damping only after spring has had 2.5s to ring; prevents killing overshoot on CALM entry
-  const activeDamping = (gust.state === 'CALM' && gust.phaseTimer > 5.0) ? SPRING_DAMPING * 4 : SPRING_DAMPING;
+  const springTarget    = gust.strength;
+  const springStiffness = SPRING_STIFFNESS_BASE + rainT * (SPRING_STIFFNESS_RAIN - SPRING_STIFFNESS_BASE);
+  const springDamping   = SPRING_DAMPING_BASE   + rainT * (SPRING_DAMPING_RAIN   - SPRING_DAMPING_BASE);
+  const springForce = (springTarget - springPos) * springStiffness;
+  // High damping only after spring has had 5s in CALM; rain version stays bent longer
+  const activeDamping = (gust.state === 'CALM' && gust.phaseTimer > 5.0) ? springDamping * 4 : springDamping;
   const dampForce = springVel * activeDamping;
   springVel += (springForce - dampForce) * safeDelta;
   springPos += springVel * safeDelta;
@@ -2875,7 +3442,7 @@ function animate() {
       gustBlend = Math.max(0.0, gustBlend - safeDelta * 3.0);
     }
   }
-  grassMaterial.uniforms.uGustBlend.value = gustBlend;
+  grassMaterial.uniforms.uGustBlend.value = gustBlend * (1.0 - rainT);
 
   grassMaterial.uniforms.uTime.value = elapsed;
   grassMaterial.uniforms.uGustFrontX.value = gust.frontX;
@@ -2888,36 +3455,46 @@ function animate() {
   grassMaterial.uniforms.uGustDirX.value = currentDirX;
   grassMaterial.uniforms.uGustDirZ.value = currentDirZ;
 
-  if (todTransitioning && transitionFrom && transitionTo) {
+  // Rain suppression: ambient sway and trail strength scale with rainT
+  const rainSuppression = 1.0 - rainT * 0.85;
+  grassMaterial.uniforms.uAmbientDirX.value    = 0.92 * rainSuppression;
+  grassMaterial.uniforms.uAmbientDirZ.value    = 0.38 * rainSuppression;
+  grassMaterial.uniforms.uTrailStrengthX.value = 0.8  * (1.0 - rainT * 0.25);
+  grassMaterial.uniforms.uTrailStrengthZ.value = 0.8  * (1.0 - rainT * 0.25);
+
+  const todActive = todTransitioning;
+  if (todActive && transitionFrom && transitionTo) {
     todTransitionT = Math.min(1.0, todTransitionT + safeDelta / TOD_TRANS_DUR);
     const ease = todTransitionT < 0.5
       ? 2 * todTransitionT * todTransitionT
       : 1 - Math.pow(-2 * todTransitionT + 2, 2) / 2;
 
+    todT = isNight ? ease : 1 - ease;
+
     const u = grassMaterial.uniforms;
-    u.uBaseColor.value.lerpVectors(transitionFrom.base,      transitionTo.base,      ease);
-    u.uMidColor.value.lerpVectors(transitionFrom.mid,       transitionTo.mid,       ease);
-    u.uTipPale.value.lerpVectors(transitionFrom.tipPale,   transitionTo.tipPale,   ease);
-    u.uTipBright.value.lerpVectors(transitionFrom.tipBright,transitionTo.tipBright,ease);
     u.uBentBase.value.lerpColors(transitionFrom.bentBase,  transitionTo.bentBase,  ease);
     u.uBentMid.value.lerpColors(transitionFrom.bentMid,   transitionTo.bentMid,   ease);
     u.uBentTipLo.value.lerpColors(transitionFrom.bentTipLo,transitionTo.bentTipLo,ease);
     u.uBentTipHi.value.lerpColors(transitionFrom.bentTipHi,transitionTo.bentTipHi,ease);
-    u.uSpecColor.value.lerpVectors(transitionFrom.spec,    transitionTo.spec,      ease);
-    u.uSunDir.value.lerpVectors(transitionFrom.sunDir,     transitionTo.sunDir,    ease);
-    u.uSunDir.value.normalize();
-    u.uLightMin.value = transitionFrom.lightMin + (transitionTo.lightMin - transitionFrom.lightMin) * ease;
-    u.uAOMin.value    = transitionFrom.aoMin    + (transitionTo.aoMin    - transitionFrom.aoMin)    * ease;
-    u.uHazeColor.value.lerpVectors(transitionFrom.hazeColor, transitionTo.hazeColor, ease);
 
-    const skyNow = new THREE.Color().lerpColors(transitionFrom.sky, transitionTo.sky, ease);
-    renderer.setClearColor(skyNow);
-    groundMaterial.uniforms.uGroundNear.value.lerpColors(
-      transitionFrom.groundNear, transitionTo.groundNear, ease);
-    groundMaterial.uniforms.uGroundFar.value.lerpColors(
-      transitionFrom.groundFar, transitionTo.groundFar, ease);
+    if (todTransitionT >= 1.0) {
+      todTransitioning = false;
+      todT = isNight ? 1 : 0;
+    }
+  }
 
-    if (todTransitionT >= 1.0) todTransitioning = false;
+  if (rainTransitioning) {
+    const nowMs = performance.now();
+    const p = Math.min((nowMs - rainTransStart) / RAIN_TRANS_DUR, 1.0);
+    const ease = p < 0.5 ? 2 * p * p : -1 + (4 - 2 * p) * p;
+    rainT = isRain ? ease : 1.0 - ease;
+    if (p >= 1.0) {
+      rainTransitioning = false;
+      if (!isRain && rainAudioEl && !rainAudioEl.paused) rainAudioEl.pause();
+    }
+    applyWeather();
+  } else if (todActive) {
+    applyWeather();
   }
 
   if (isNight) {
@@ -2965,6 +3542,23 @@ function animate() {
   updateClips(safeDelta);
 
   updateFireflyGlowInstances(safeDelta);
+
+  updateRain(safeDelta);
+
+  if (rainAudioGain && audioCtx && !audioMuted) {
+    if (rainTransitioning) {
+      rainAudioGain.gain.setTargetAtTime(rainT * 0.12, audioCtx.currentTime, 0.15);
+    }
+    rainGustGain.gain.setTargetAtTime(0.0, audioCtx.currentTime, 0.05);
+  }
+  if (musicMasterGain && audioCtx) {
+    if (rainTransitioning) {
+      musicMasterGain.gain.setTargetAtTime(1.0 - rainT, audioCtx.currentTime, 0.15);
+    }
+  }
+  if (rainAudioGain && !rainTransitioning && isRain) {
+    console.log('rainAudioGain:', rainAudioGain.gain.value);
+  }
 
   grassNear.updateMatrixWorld();
   grassFar.updateMatrixWorld();
