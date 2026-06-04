@@ -57,17 +57,33 @@ Lerped as a flat colour over 2s TOD transition via `renderer.setClearColor`.
 | `uSpecColor` | `(0.9, 1.0, 0.7)` warm | — | `(0.18, 0.22, 0.45)` blue | — |
 | `uLightMin` | `0.62` | — | `0.35` | — |
 | `uAOMin` | `0.32` | — | `0.08` | — |
+| `uSunDir` | `(0.8, 0.6)` normalised on CPU | — | `(0.3, 0.15)` normalised on CPU | — |
+
+### Bent grass palette (cursor trail mix)
+
+TOD-lerpable via `uBentBase`, `uBentMid`, `uBentTipLo`, `uBentTipHi`. Day init:
+
+| Uniform | RGB (approx) |
+|---------|--------------|
+| `uBentBase` | (32, 62, 18) |
+| `uBentMid` | (42, 78, 25) |
+| `uBentTipLo` | (65, 118, 40) |
+| `uBentTipHi` | (90, 152, 58) |
+
+Night targets set in `applyTOD()` — blue-shifted counterparts matching night grass hue.
 
 ---
 
-### Grass Distance Haze (fragment shader — fixed, not TOD-aware)
+### Grass Distance Haze (TOD-aware)
 
-| Value | vec3 | Hex |
-|-------|------|-----|
-| `hazeColor` | `(0.13, 0.22, 0.09)` | `#213817` |
-| Mix formula | `mix(hazeColor, col, 0.55 + depthT * 0.45)` | — |
+| Mode | `uHazeColor` vec3 | Hex (approx) |
+|------|-------------------|--------------|
+| Day | `(0.13, 0.22, 0.09)` | `#213817` |
+| Night | `(0.08, 0.10, 0.18)` | `#141a2e` |
 
-⚠️ Currently stays green in night mode — not blue-shifted with TOD.
+Mix formula (fragment): `mix(uHazeColor, col, 0.55 + depthT * 0.45)`.
+
+Lerped during TOD transition alongside grass palette (`transitionFrom.hazeColor` / `transitionTo.hazeColor`).
 
 ---
 
@@ -92,9 +108,11 @@ Lerped as a flat colour over 2s TOD transition via `renderer.setClearColor`.
 | Element | Mechanism | Works? |
 |---------|-----------|--------|
 | Grass palette (all uniforms above) | Uniform lerp | ✅ |
+| Bent palette | `.lerpColors()` | ✅ |
 | Sky / clear colour | `renderer.setClearColor` lerp | ✅ |
 | Ground gradient (`uGroundNear` / `uGroundFar`) | Uniform `.lerpColors()` | ✅ |
-| Grass distance haze | Not implemented | ❌ stays green at night |
+| Distance haze (`uHazeColor`) | Uniform lerp | ✅ |
+| Sun direction (`uSunDir`) | Vector lerp + **CPU normalise** each frame | ✅ |
 
 ### Night targets (`transitionTo` when `isNight`)
 
@@ -102,26 +120,42 @@ Lerped as a flat colour over 2s TOD transition via `renderer.setClearColor`.
 sky:        new THREE.Color(3/255,  5/255,  12/255)  // #03050c
 groundNear: new THREE.Color(0x03050c)                 // matches sky
 groundFar:  new THREE.Color().setRGB(0.078, 0.135, 0.207)  // #142335 — day-far luminosity, blue hue
+hazeColor:  new THREE.Vector3(0.08, 0.10, 0.18)
+sunDir:     new THREE.Vector2(0.3, 0.15)  // normalised on CPU after lerp
 ```
-
----
-
-## Known Mismatches (open issues)
-
-1. **Grass distance haze stays green at night** — `hazeColor` is a fixed constant in the fragment shader; should shift toward a blue-grey at night.
 
 ---
 
 ## Grass Geometry Tiers
 
-| Tier | Instances | Segments | Tris/blade | Total tris | Z placement |
-|------|-----------|----------|------------|------------|-------------|
-| `grassNear` | 260,000 | 3 | 6 | 1,560,000 | `0.28 + pow(r, 0.22) * 0.62` (near-biased) |
-| `grassFar` | 180,000 | 2 | 4 | 720,000 | `pow(r, 2.2) * 0.88` (far-biased) |
-| `grassVeryFar` | 90,000 | 1 | 2 | 180,000 | `pow(r, 3.5) * 0.60` (very-far-biased) |
-| **Total** | **530,000** | — | — | **~2.46M** | — |
+| Tier | Instances | Segments | Tris/blade | Total tris | Z placement | Culling |
+|------|-----------|----------|------------|------------|-------------|---------|
+| `grassNear` | 145,000 | 3 | 6 | 870,000 | `0.28 + pow(r, 0.22) * 0.72` | `DoubleSide` |
+| `grassFar` | 100,000 | 2 | 4 | 400,000 | `pow(r, 2.2) * 0.88` | `FrontSide` |
+| `grassVeryFar` | 50,000 | 1 | 2 | 100,000 | `pow(r, 3.5) * 0.60` | `FrontSide` |
+| **Total** | **295,000** | — | — | **~1.37M** | — | — |
 
-`grassVeryFar` uses `THREE.FrontSide` only; all others `DoubleSide`.
+DPR capped at **1.0** (not 1.5).
+
+---
+
+## Field Bounds
+
+Computed from locked camera frustum at **16:9 reference aspect**, then **6% margin** on all sides. Bounds are fixed for the session (no intro union or post-intro trim).
+
+Grass/mow/trail UV reciprocals: `uFieldInvW = 1 / (fieldMaxX - fieldMinX)`, `uFieldInvD = 1 / (fieldMaxZ - fieldMinZ)`.
+
+---
+
+## Camera (locked)
+
+| | Value |
+|---|--------|
+| Position | `(0, 18, 4)` |
+| Look-at | `(0, 1, -29)` |
+| FOV | 35 |
+
+**No intro animation** — camera starts at final pose. Constants `CAM_INTRO_END_*` name the locked pose only.
 
 ---
 
@@ -132,17 +166,39 @@ groundFar:  new THREE.Color().setRGB(0.078, 0.135, 0.207)  // #142335 — day-fa
 | Mow RT (`uMowMap`) | 256×256 HalfFloat ping-pong | Visual blade height |
 | `mowCells` grid | 48×48 CPU | FX gating (snip audio + clip particles) |
 
-- Regrowth: linear decay `safeDelta / 20.0` per frame (one decay pass per frame, decoupled from stamp sub-steps)
-- Cell suppression: 20s cooldown, gated by RT intensity > 0.5
+- **Regrowth:** linear decay `safeDelta / 20.0` per frame (one full-map decay pass, then stamp sub-steps).
+- **Visual vs trail:** mow stamp uses fixed `uBrushSize * 0.6` (`step`); trail brush uses `smoothstep` + depth `farBoost` — cuts read narrower than hover trail.
+- **Horizontal cuts:** world-space sub-steps (`stepLenWorld = brush * 0.25 * min(fieldW, fieldD)`, max 48); samples segment start (`t0`) and each step end (`t1`); stamp passes use RT **scissor** around sub-step end.
+- **FX (`applyMowAtPoint`):** if cell not cut in last **3 s**, spawn clips + snip (≤**3**/frame); **then** `mowCellMark`. Check before mark.
+- **Audio timbre (`mowCellCut`):** “over cut” rustle shift if cell marked within **10 s**; CPU timer only (no mow RT readback).
+- **Input:** LMB hold (desktop); two-finger same-direction drag (touch).
+- **Clip particles:** 1200 pool; CPU maintains `activeClips[]` — physics loop skips inactive slots entirely.
 
 ---
 
-## Camera (locked)
+## Performance Optimisations (June 2026)
 
-| | Intro start | Final (locked) |
-|--|------------|----------------|
-| Position | `(0, 34, 13.5)` | `(0, 18, 4)` |
-| Look-at | `(0, 1, -29)` | same |
-| FOV | 43 | 35 |
+Applied in `index.html` without intended visual/audio change:
 
-Intro: 2s cubic ease-out. Field bounds fixed at canonical 16:9 aspect from locked pose.
+| Area | Change |
+|------|--------|
+| Gust vertex block | Early-out when `uGustBlend` and `uGustStrength` ≈ 0 |
+| Fireflies | Skip sim + glow when `fireflyFadeT === 0 && !isNight` |
+| Firefly glow slots | Reuse `_ffOccupiedSet` / `_ffCandidates` buffers |
+| Clips | `activeClips` index list; early return when empty |
+| Grass vertex UV | Single `fieldUV` + CPU reciprocals `uFieldInvW/D` |
+| Lighting | `uSunDir` normalised on CPU; no `normalize()` in fragment |
+| Uniform cleanup | Removed dead `uTrailSpring` + legacy wind uniforms |
+| Mow stamp scissor | Small RT write region per cut sub-step |
+| Mow readback removed | `mowCellCut` no longer samples mow RT on CPU |
+
+**Reverted:** `grassNear` `FrontSide` (visible culling artefact) — stays `DoubleSide`.
+
+---
+
+## Dev UI
+
+| Element | Behaviour |
+|---------|-----------|
+| `#fps-dev` | Shown when URL contains `?dev` |
+| `#ff-dev-panel` | Firefly count/size tuning; **collapsed by default** |

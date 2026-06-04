@@ -1,257 +1,208 @@
 # Touch Grass — project context
 
-Barley-like tall grass field: cursor interaction, travelling wind gusts, and ASMR audio. Two implementations share the same visual goal; **WebGL is the active build**.
+Barley-like tall grass field: cursor trail, travelling wind gusts, grass cutting with clip particles, day/night TOD, fireflies, and ASMR audio. **Single-file WebGL build:** `index.html`.
 
 ## Files
 
 | File | Role |
 |------|------|
-| `touch_grass.html` | Canvas 2D reference — three-angle blade physics, awns, full `P` tuning. **Do not modify** unless explicitly migrating features. |
-| `touch_grass_webgl.html` | Active WebGL prototype — Three.js r169 (esm.sh), 150k instanced blades, gust state machine, directional trail, spring recovery, audio. |
-| `.cursor/rules/grass.mdc` | Cursor rules for both HTML builds. |
+| `index.html` | Active build — Three.js r169 (esm.sh), instanced grass tiers, gust CPU, trail + mow ping-pong RTs, Web Audio, fireflies, clips. |
+| `.cursor/design.md` | Colour values, TOD targets, geometry tiers, visual architecture. |
+| `.cursor/context.md` | This file — behaviour, systems, performance notes. |
+| `assets/` | Custom cursor SVGs (`Hand32.svg`, `Sci32.svg`, 64px variants). |
 
-Serve locally: `npx serve .` → open `touch_grass_webgl.html`.
-
----
-
-## Canvas 2D reference (`touch_grass.html`)
-
-- **Physics:** `Blade.update()` — three-angle springs (`baseAngle`, `tipAngle`, `awnAngle`).
-- **Rendering:** `Blade.draw()` — cubic S-curve, 3-stop gradient, awn strokes at tip.
-- **Population:** `mkBlades()` with bottom-biased tufts; density ~2600 blades (Canvas ceiling ~4000).
-- **Defaults:** density 2600, height 1.4, width 0.7, spread 0.045, wind/mow params in `P` object.
-
-Not yet ported to WebGL: per-blade spring physics, awn geometry, mow mode.
+Serve locally: `npx serve .` → open `index.html`.
 
 ---
 
-## WebGL build (`touch_grass_webgl.html`)
-
-### Stack
+## Stack
 
 - Three.js **0.169** via importmap (`three` from esm.sh).
-- Single module script: scene, shaders, gust CPU, trail ping-pong RT, Web Audio.
-- **150,000** instanced blades; `PlaneGeometry(1,1,1,6)` per blade, base at Y=0.
-- `setPixelRatio(Math.min(devicePixelRatio, 1.5))`.
-- Clear color `0x040a01`; ground `0x0a1503`.
+- **295,000** instanced blades across three tiers (see `.cursor/design.md`).
+- DPR cap: `Math.min(devicePixelRatio, 1.0)`.
+- Clear colour day `#0d1a09`; ground uses TOD-aware gradient shader.
 
-### Field placement
+---
 
-On init, camera is set to **final** pose; frustum corners are raycast to **Y=0**; bounds get **25% margin**:
+## Field & camera
+
+**No intro pan** — camera starts locked at final pose.
+
+| | Value |
+|---|--------|
+| Position | `(0, 18, 4)` |
+| Look-at | `(0, 1, -29)` |
+| FOV | 35 |
+
+Field bounds are computed once from the locked frustum raycast to **Y=0**, using a **16:9 reference aspect** (`FIELD_REFERENCE_ASPECT`), then expanded **6% on all sides** (X, near Z, far Z):
 
 - `fieldMinX`, `fieldMaxX`, `fieldMinZ`, `fieldMaxZ` (logged to console).
-- Blades: uniform random in that box (no Z power-bias or distance culling).
+- Grass/trail/mow UVs: `(world - fieldMin) * uFieldInvW/D` (reciprocals set at init).
 - Ground plane sized/positioned to match field bounds.
-- Trail/grass UVs: `(world - fieldMin) / (fieldMax - fieldMin)`.
 
-### Blade attributes (per instance)
+---
 
-- `aHeight` 0.4–1.2, `aWidth` ~0.018–0.035, `aLean` **−0.25 to +0.45**, `aRandom` (±10/255 color variation).
-- Placement: `rotation.y = 0` (world-consistent wind/gust bow).
+## Grass tiers
 
-### Grass vertex shader — displacement order
+Three `InstancedMesh` layers share one vertex/fragment shader (separate materials for culling):
+
+| Tier | Count | Segments | Side |
+|------|-------|----------|------|
+| `grassNear` | 145,000 | 3 | `DoubleSide` |
+| `grassFar` | 100,000 | 2 | `FrontSide` |
+| `grassVeryFar` | 50,000 | 1 | `FrontSide` |
+
+Per-instance attributes: `aHeight` 0.4–1.2, `aWidth` ~0.018–0.035, `aLean` −0.25 to +0.45, `aRandom`.
+
+Z placement (within field bounds):
+
+- **Near:** `zT = 0.28 + pow(rand, 0.22) * 0.72` (near-biased, spans full depth).
+- **Far:** `zT = pow(rand, 2.2) * 0.88`.
+- **Very far:** `zT = pow(rand, 3.5) * 0.60`.
+
+---
+
+## Grass vertex shader — displacement order
 
 1. Scale width/height, S-curve lean in local X.
-2. **Trail displacement** (local space, before instance matrix): sample `uTrail` at field UV.
-   - **R/G:** encoded stroke direction (0.5 = neutral).
-   - **B:** intensity.
-   - `push = trailIntensity * pow(uv.y,2) * uTrailStrengthX * (1.2 + uCursorSpeed * 1.8) * (1.0 + uTrailSpring * 0.8)`.
-   - `transformed += trailDir * push`.
-3. **Gust band** (world space): `inGust = lead * trailEdge * uGustBlend` from `uGustFrontX`, `uGustWidth`, smoothed `uGustDirX/Z`.
-4. **Gust lean** (gust-aligned): `baseDisp` from sin×sin patches × `uGustStrength` (spring output); small `turbDisp` (15% of strength); `crossDisp` for subtle cross-wind.
-5. **Ambient wind** (fixed direction, independent of gust): `uAmbientStrength` (0.18), `uAmbientDirX/Z` (0.92, 0.38) — patch lean + slow temporal breeze + tip sway (`ambientX`). Applied in **world space along ambient axis**, not rotated with gust direction (prevents direction snap).
-6. Tip weighting: `windStrength = pow(uv.y, 2.0)` on gust and ambient magnitudes.
-7. **`vCursorBend`** (for fragment color only): `length(trailDir * push) / (aHeight * 0.28)` — per-vertex, tip-weighted via `push`; wind/gust do not contribute.
+2. **Mow height** — sample `uMowMap` at shared `fieldUV`; cut phase (>0.5) clamps blade to 50% height; regrowth phase linearly restores full height.
+3. **Trail displacement** (local space): sample `uTrail` at same `fieldUV`.
+   - R/G: stroke direction; B: intensity.
+   - `push = trailIntensity * pow(windUvY, 2) * uTrailStrengthX * 2.5 * effectiveScale`.
+4. **Gust band** (world space): early-out when `uGustBlend <= 0.001` or `abs(uGustStrength) <= 0.001`; otherwise `inGust = lead * trailEdge * uGustBlend`.
+5. **Ambient wind** — fixed `uAmbientDirX/Z`, independent of gust direction.
+6. **`vCursorBend`:** `pow(trailIntensity, 3.5)` for fragment bent-colour mix.
 
-**Key grass uniforms:** `uTime`, `uGustFrontX`, `uGustStrength` (from spring), `uGustWidth` (smoothed), `uGustDirX/Z` (smoothed), `uGustBlend`, `uAmbientStrength`, `uAmbientDirX/Z`, `uTrailSpring`, `uTrail`, `uCursorSpeed`, `uTrailStrengthX/Z`.
+**Key grass uniforms:** `uTime`, gust/spring uniforms, ambient, `uTrail`, `uMowMap`, `uFieldMinX/Z`, `uFieldInvW/D`, `uTrailStrengthX/Z`, `uCutHeight`.
 
-Old global sine-wave wind was **removed**; WIND panel uniforms remain bound but are not used by the grass shader.
+Removed dead uniforms (not referenced in shaders): `uTrailSpring`, `uWindSpeed`, `uWindStrength`, `uTurbulence`, `uWindDir`.
 
-**Anti-banding / Moiré mitigations:** irrational spatial frequencies; per-blade `rPhase` and `freqVar` from `aRandom`/`aHeight`; gust-aligned `scroll`/`cross` coordinates; sin×sin pocket patterns instead of single-axis stripes.
+---
 
-### Grass fragment shader — colors
+## Grass fragment shader
 
-Procedural barley gradient (no texture):
+Procedural barley gradient with TOD-lerpable palette uniforms (`uBaseColor`, `uMidColor`, `uTipPale`, `uTipBright`, `uBentBase`–`uBentTipHi`).
 
-| Stop | RGB | Hex (approx) | Blend region (`vUv.y`) |
-|------|-----|--------------|-------------------------|
-| Base | (28, 58, 18) | `#1C3A12` | 0% + `randVar` from `aRandom` |
-| Mid | (52, 105, 32) | `#346920` | smoothstep 0.35 → 0.50 |
-| Tip pale | (195, 215, 155) | `#C3D79B` | smoothstep 0.70 → 0.85 |
-| Tip bright | (225, 232, 190) | `#E1E8BE` | mixed into tip 0.70 → 1.0 |
+- AO via `uAOMin`; directional light via **`uSunDir` pre-normalised on CPU** (init + after TOD lerp).
+- Distance haze via TOD-lerpable `uHazeColor`.
+- Mow cut brightening when `vMow > 0.35`.
+- Cursor bend mixes toward bent palette using `vCursorBend`.
 
-Post-processing on `col`:
+---
 
-- **AO:** `col *= (0.25 + 0.75 * smoothstep(0, 0.25, vUv.y))`.
-- **Directional light:** sun `(0.8, 0.6)` vs `vWorldNormal` (from `aLean`); `light = 0.6 + 0.4 * sunDot`.
-- **Tip specular:** above 0.85 height; warm add `vec3(0.9, 1.0, 0.7) * specular`, strength up to 0.4.
-
-**Cursor bend → darker tips (cursor only, not wind/gust):**
-
-| Color | RGB | Role |
-|-------|-----|------|
-| `tipDarkGreen` | (38, 72, 22) | Bent tip lower |
-| `tipDarkGreenHi` | (52, 98, 32) | Bent tip upper |
-
-- `cursorBendAmt = pow(clamp(vCursorBend, 0, 1), 1.4)` — tracks **push magnitude**, not rawMin raw trail B.
-- Unbent: `tipPale → tipBright`. Bent: mix toward `tipDarkGreen → tipDarkGreenHi`.
-- Tip-zone only: extra 18% darken + specular suppressed when bent.
-- Color recovery follows push + trail spring (same signal as bend animation); fully normal when `push → 0`.
-
-Output: `gl_FragColor = vec4(col, 1.0)` (opaque).
-
-### Gust system (CPU)
+## Gust system (CPU)
 
 State machine: `CALM` → `BUILDING` → `ACTIVE` → `FADING` → `CALM`.
 
-**Spawn params (`spawnGust`):**
+Visual strength is **`springPos`** (underdamped spring), not raw `gust.strength`. Audio uses `gust.strength`.
 
-| Param | Range |
-|-------|--------|
-| `speed` | 6–18 units/s |
-| `width` | 180–400 |
-| `targetStrength` | 0.3–1.0 |
-| `buildDuration` | 1.5–4 s |
-| `fadeDuration` | 2–5 s (stored; not used for visual fade — see FADING) |
-| `calmTimer` (between gusts) | 0.5–3 s |
-| Initial calm | 0.5–1.5 s |
+| Constant | Value |
+|----------|-------|
+| `SPRING_STIFFNESS` | 1.8 |
+| `SPRING_DAMPING` | 0.9 (×4 overdamping in CALM after 5 s) |
+| `TRAIL_STIFFNESS` | 3.0 |
+| `TRAIL_DAMPING` | 3.5 |
 
-- Spawns off-field: `frontX = fieldMinX - 20` or `fieldMaxX + 20` by travel direction.
-- **ACTIVE → FADING:** directional exit when `frontX` passes field bounds ±20.
-- **FADING:** `gust.strength` steps to **0** immediately (spring drives visual release with overshoot); after **0.05 s** → `CALM`.
-- **ACTIVE:** constant `gust.strength = targetStrength` (no sine wobble).
-- Spawn gated: `calmTimer <= 0` **and** (`springSettled` or `phaseTimer > 8 s`).
-
-### Spring recovery (CPU → shader)
-
-Visual gust strength is **`springPos`**, not raw `gust.strength`. Audio still uses `gust.strength`.
-
-| Constant | Value | Role |
-|----------|-------|------|
-| `SPRING_STIFFNESS` | 1.8 | Slower recovery (~5 s period) |
-| `SPRING_DAMPING` | 0.9 | Underdamped overshoot on release |
-| `TRAIL_STIFFNESS` | 3.0 | Cursor bend spring-back |
-| `TRAIL_DAMPING` | 0.8 | |
-
-- **No clamp** on `springPos` / `trailSpring` (allows negative overshoot past upright).
-- **CALM overdamping:** `SPRING_DAMPING * 4` only after `phaseTimer > 5 s` in CALM (lets ring ~5 s first).
-- **Smoothed uniforms:** `currentDirX/Z` (lerp over ~⅓ build duration), `currentWidth` (lerp `delta * 1.5`), `gustBlend` (ramps in during BUILDING/ACTIVE/FADING; fades in CALM once spring settled).
-- **`uGustBlend`:** gates `inGust` to 0 at spawn so band geometry cannot snap visible lean before blend ramps up.
-
-Console on load: `Springs: 1.8 0.9 3 0.8`.
-
-### Mouse trail (256×256 ping-pong RT)
-
-**Write (trail fragment shader):**
-
-- `prev.b *= uFade` (slider-controlled; default **0.996**, range **0.95–0.998**).
-- `prev.rg = mix(vec2(0.5), prev.rg, prev.b)` — direction returns to neutral as intensity fades.
-- Hard cutoff: `if (prev.b < 0.012)` → `(0.5, 0.5, 0.0)`.
-- Brush at `uMouse` (field UV): strength × `(0.4 + uCursorSpeed * 0.6)`; paints encoded direction into RG and adds to B.
-
-**CPU each frame (`updateCursorDirection`):**
-
-- Smoothed world-space direction from cursor delta (`smoothDirX/Z`).
-- Smoothed speed `smoothSpeed`; `uCursorSpeed = min(1, smoothSpeed * 0.8)` on trail + grass materials.
-
-**Trail spring (`animate`):** `trailTarget = min(1, smoothVelocity * 0.8) * onGrass` → `uTrailSpring` multiplies cursor push for residual overshoot after cursor stops.
-
-**Read (grass):** `trailDir = rg*2-1`, `trailIntensity = b`. B drives **displacement**; color uses `vCursorBend` derived from push (B × tip height × spring), not raw B alone.
-
-**Mouse:** raycast to Y=0 → field UV → `uMouse`. `mouseleave` sets `uMouse (-10,-10)` (stops painting; does **not** clear RT).
-
-At **60 fps**, default `uFade = 0.996` gives slower spatial fade than 0.992 (~2× longer trail persistence).
-
-### Camera
-
-**Locked** after intro — no CAMERA panel.
-
-| | Start (intro) | End (rest) |
-|---|----------------|------------|
-| Position | `(0, 34.0, 13.5)` | `(0, 18, 4)` |
-| Look at | `(0, 1, -29)` | same |
-| FOV | 43 | 35 |
-
-- Intro **2.0 s**, cubic ease-out (`INTRO_DURATION`).
-- Resize updates aspect + renderer size only.
-
-### Audio (Web Audio; first click/mousemove unlocks)
-
-**Cursor rustle** (panner follows mouse X):
-
-- Two noise layers: bandpass ~2.8 kHz + lowpass ~400 Hz.
-- Driven by `smoothVelocity * trailIntensity` (B channel 8×8 read under cursor).
-- `cursorActivity` caps rustle when still or off grass.
-
-**Wind** (separate `windPanner`, pans with `gust.frontX`):
-
-- **Whoosh:** low bandpass ~300–550 Hz, `gain ∝ smoothWindActivity * 0.009`.
-- **Rustle:** high bandpass 1800 Hz + 2400–4000 Hz, `gain ∝ smoothWindActivity * 0.038`.
-- Driven by `gust.strength` (asymmetric attack/decay), not `springPos`.
-
-**MUTE** silences cursor + wind gains.
-
-### UI
-
-| Panel | Notes |
-|-------|--------|
-| **WIND** | Speed, strength, turbulence, direction — bound to legacy grass uniforms (visual gust uses CPU machine + springs). |
-| **INTERACTION** | Brush, trail fade, displacement X/Z. |
-| **MUTE** | Bottom-right. |
-| **Fullscreen** | Above MUTE; `requestFullscreen` on `<html>`. |
-
-**INTERACTION defaults:**
-
-| Control | Default |
-|---------|---------|
-| Brush Size | 0.022 |
-| Brush Strength | 0.85 |
-| Trail Fade (`uFade`) | **0.996** |
-| Displacement X (`uTrailStrengthX`) | 0.8 |
-| Displacement Z (`uTrailStrengthZ`) | 0.8 (bound; push magnitude uses X scale in shader) |
-
-**WIND defaults:** speed 0.75, strength 0.8, turbulence 0.3, direction 0.125.
-
-### Animation loop (each frame)
-
-1. `getDelta()` / `elapsed`; camera intro (if elapsed < 2 s).
-2. `updateGust(delta)`.
-3. Gust spring integration → `uGustStrength = springPos`; `gustBlend` update → `uGustBlend`.
-4. Gust uniforms: `uGustFrontX`, smoothed `uGustWidth`, `uGustDirX/Z`, `uTime`.
-5. `updateCursorDirection()` + `uCursorSpeed`.
-6. `updateTrail()` (ping-pong).
-7. `updateAudioFromTrail()`; trail spring → `uTrailSpring`.
-8. Render grass + ground.
+Smoothed uniforms: `currentDirX/Z`, `currentWidth`, `gustBlend` → `uGustBlend`.
 
 ---
 
-## Planned / not in WebGL yet
+## Mouse trail (256×256 ping-pong RT)
 
-- Random wind gusts tied to WIND sliders in shader (replaced by CPU gust bands).
-- Grass cutting / mow mode.
-- Three-angle spring physics + awns from Canvas reference.
-- Short lawn mode switcher.
-
----
-
-## Known bad approaches (both builds)
-
-- Solid-fill blades without gradients (looked like paint).
-- Layered shell/dot passes (pixelated).
-- Single-angle rigid physics (Canvas; do not revert in 2D).
-- Cross-plane merged blade geometry (reverted; X-clumps, 2× triangles).
-- Global sine wind only (replaced by travelling gust bands in WebGL).
-- Projecting ambient lean onto gust direction axis (caused direction snap — ambient now uses fixed `uAmbientDirX/Z`).
-- Spring reset on `spawnGust()` (killed continuity; removed).
-- Clamping `springPos` to ≥ 0 (prevented visible overshoot; removed).
-- Smooth FADING ramp of `gust.strength` (spring arrived at 0 with no velocity; replaced by step to 0 for spring-driven recovery).
-- **Cursor tip color from raw trail B** (B lingers in RT after push recovers → ghost discoloration; use `vCursorBend` from push instead).
-- **Hard `smoothstep` gate on cursor color** (unnatural recovery cliff; use `pow(bend, 1.4)` instead).
-- **Double `tipWeight` on color** (color faded before visible bend recovered; `vCursorBend` is already tip-weighted per vertex).
+- Write pass: fade `prev.b *= uFade` (default **0.996**), direction neutralises as B fades, brush at cursor UV.
+- Read in grass: trail displacement + `vCursorBend` for colour.
+- `uBrushSize` default **0.007** (field-normalised).
 
 ---
 
-## Performance
+## Mow system
 
-- WebGL target: **150k** instances, ~1.8M triangles, DPR cap 1.5 — profile in browser (headless FPS not reliable here).
-- Canvas 2D hard limit ~4000 blades; WebGL migration was for density + GPU trail.
+| Layer | Resolution | Role |
+|-------|-----------|------|
+| Mow RT (`uMowMap`) | 256×256 HalfFloat ping-pong | Visual blade height (GPU) |
+| `mowCells` grid | 48×48 CPU | FX gating — snip audio + clip particles |
+
+- **Regrowth:** `safeDelta / 20.0` per frame (one full-map decay pass, then stamp sub-steps; intensity 1→0 over ~20 s).
+- **GPU stamps:** `renderMowPass` cut mode; brush `step(dist, uBrushSize * 0.6)` — **no** trail `farBoost` (trail brush is wider, especially toward horizon).
+- **Horizontal cut fidelity:** world-space sub-steps (`stepLenWorld = brush * 0.25 * min(fieldW, fieldD)`, up to 48); dual endpoint sampling on first sub-step (`t0` + `t1`); stamp passes use a small **scissor** around each sub-step end (~brush radius in texels).
+- **`applyMowAtPoint`:** check `recentlyCut` (**3 s** per cell, `(mowElapsed - mowCells[idx]) < 3`) **before** `mowCellMark`; spawn clips + `fireCutSnip` if clear, max **3** per frame; then mark cell. Do not mark before the check (same-frame `recentlyCut` would always block FX).
+- **`mowCellCut`:** audio “over cut” timbre only — cell marked within last **10 s** (`mowElapsed - mowCells[idx] < 10`); **no** `readRenderTargetPixels` on mow RT (removed for perf).
+- **Input:** cut when `isMouseDown || isTouchMowing` and cursor on field; desktop = **LMB hold**; touch = **two fingers**, same direction.
+- **Clips:** 1200-slot pool; **`activeClips`** index list — `updateClips()` iterates only active clips and returns early when empty.
+
+---
+
+## TOD, fireflies, audio
+
+- **TOD toggle** (`#btn-tod`): 2 s quadratic ease; lerps grass palette, bent colours, `uHazeColor`, `uSunDir` (re-normalised each frame during transition), sky, ground.
+- **Fireflies:** permanent + temp population (defaults 280 + 40); glow uses 12 slot instances. Sim + glow updates **skipped when `fireflyFadeT === 0 && !isNight`**.
+- **Firefly dev panel** (`#ff-dev-panel`): collapsed by default (`ff-dev-collapsed` on init); visible in `?dev` mode context alongside `#fps-dev`.
+- **Audio:** cursor rustle, wind gust layers, cut drag loop (`cutDragGain` while LMB/touch cutting on grass), snip via `fireCutSnip` (50 ms throttle, gated by `applyMowAtPoint`).
+
+---
+
+## UI
+
+| Control | Notes |
+|---------|--------|
+| `#btn-info` | Info card (morph animation) |
+| `#btn-tod` | Day/night toggle |
+| Custom cursor | Hand hover / scissors while cutting; hidden until loader clears (`sceneReady`) |
+| `#fps-dev` | FPS overlay when `?dev` in URL |
+| `#ff-dev-panel` | Firefly tuning (dev) |
+
+No WIND / INTERACTION slider panels — trail/mow brush values are code constants.
+
+---
+
+## Animation loop (each frame)
+
+1. `updateGust` → spring integration → gust uniforms.
+2. TOD lerp (if transitioning) → **`uSunDir.normalize()`**.
+3. Firefly fade timer; trail + mow updates; audio.
+4. `updateFireflies` (day skip); `updateClips` (active-list early-out); `updateFireflyGlowInstances` (day skip, reused buffers).
+5. Render grass tiers + ground + fireflies + clips + glow.
+
+---
+
+## Performance optimisations (June 2026)
+
+CPU/shader changes with **no intended visual or audio change**:
+
+| Fix | Mechanism |
+|-----|-----------|
+| Gust early-out | Skip gust sin block when blend/strength ≈ 0 |
+| Firefly day skip | Skip sim + glow when fully faded and day mode |
+| Firefly buffer reuse | Pre-allocated `_ffOccupiedSet` + `_ffCandidates`, cleared each frame |
+| Clip active-list | `activeClips[]` maintained on spawn/deactivate; no full 1200-slot scan |
+| Field UV dedup | Single `fieldUV` in vertex shader; `uFieldInvW/D` reciprocals at init |
+| CPU `uSunDir` | Normalised on CPU; fragment uses `uSunDir` directly |
+| Dead uniforms | Removed unused wind + `uTrailSpring` declarations and uploads |
+| Mow stamp scissor | Cut stamps render only a small RT region per sub-step |
+| Mow CPU readback removed | No `readRenderTargetPixels` on mow RT; `mowCellCut` uses cell timer only |
+
+**Not applied (visual regression):** `grassNear` `FrontSide` culling — reverted to `DoubleSide`.
+
+Target: ~295k blades, DPR 1.0 — profile in browser.
+
+---
+
+## Known bad approaches
+
+- Solid-fill blades without gradients.
+- Global sine wind only (replaced by travelling gust bands).
+- Projecting ambient lean onto gust direction (direction snap).
+- Clamping `springPos` to ≥ 0 (kills overshoot).
+- Cursor tip colour from raw trail B (use `vCursorBend`).
+- RT-only mow FX gating without sub-stepping (horizontal cuts missed snips/clips).
+- `mowCellMark` before `recentlyCut` in `applyMowAtPoint` (blocks all clip/snip spawns).
+- `readRenderTargetPixels` on mow RT in the cut hot path (GPU stall).
+- Per-frame `new Set()` / full clip-pool scans in hot paths.
+
+---
+
+## Not in build
+
+- Canvas 2D reference (`touch_grass.html`) — removed; three-angle spring physics + awn geometry not ported.
+- Camera intro pan / post-intro grass trim — removed.
+- WIND panel live tuning — removed.

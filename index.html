@@ -29,7 +29,8 @@ canvas {
   height: 42px;
   pointer-events: none;
   z-index: 9999;
-  opacity: 1;
+  opacity: 0;
+  display: none;
   transform: translate(-50%, -50%) scale(1);
 }
 #custom-cursor img,
@@ -422,9 +423,9 @@ let FF_GRASS_SCALE    = 0.35;
 let FF_REPEL_RADIUS   = 17;
 let FF_NIGHT_DELAY    = 2;
 
-const BLADE_NEAR      = 260000;
-const BLADE_FAR       = 180000;
-const BLADE_VERY_FAR  = 90000;
+const BLADE_NEAR      = 145000;
+const BLADE_FAR       = 100000;
+const BLADE_VERY_FAR  = 50000;
 const BLADE_COUNT     = BLADE_NEAR + BLADE_FAR;
 
 let fieldMinX, fieldMaxX, fieldMinZ, fieldMaxZ;
@@ -589,7 +590,6 @@ let touch1HasPrev = false;
 const MOW_CELLS_X = 48;
 const MOW_CELLS_Z = 48;
 const mowCells    = new Float32Array(MOW_CELLS_X * MOW_CELLS_Z);
-const mowSampleU16 = new Uint16Array(4);
 let   mowElapsed  = 0;
 
 function mowCellIdx(wx, wz) {
@@ -600,36 +600,31 @@ function mowCellIdx(wx, wz) {
   return cz * MOW_CELLS_X + cx;
 }
 
-function mowRTIntensityAt(wx, wz) {
-  const u = Math.max(0, Math.min(1, (wx - fieldMinX) / (fieldMaxX - fieldMinX)));
-  const v = Math.max(0, Math.min(1, (wz - fieldMinZ) / (fieldMaxZ - fieldMinZ)));
-  const px = Math.min(255, Math.floor(u * 256));
-  const py = Math.min(255, Math.floor(v * 256));
-  renderer.readRenderTargetPixels(mowRead, px, py, 1, 1, mowSampleU16);
-  return THREE.DataUtils.fromHalfFloat(mowSampleU16[0]);
-}
-
 function mowCellCut(wx, wz) {
   const idx = mowCellIdx(wx, wz);
-  const timerActive = mowCells[idx] > 0 && (mowElapsed - mowCells[idx]) < 20.0;
-  if (!timerActive) return false;
-  return mowRTIntensityAt(wx, wz) > 0.5;
+  if (idx < 0) return false;
+  if (mowCells[idx] <= 0) return false;
+  const elapsed = mowElapsed - mowCells[idx];
+  return elapsed < 10.0;
 }
 
 function mowCellMark(wx, wz) {
   mowCells[mowCellIdx(wx, wz)] = mowElapsed;
 }
 
-function applyMowAtPoint(worldX, worldZ) {
+function applyMowAtPoint(worldX, worldZ, distWorld, clipsThisFrame) {
   const u = (worldX - fieldMinX) / (fieldMaxX - fieldMinX);
   const v = (worldZ - fieldMinZ) / (fieldMaxZ - fieldMinZ);
-  if (u < 0 || u > 1 || v < 0 || v > 1) return;
-  const alreadyCut = mowCellCut(worldX, worldZ);
-  mowCellMark(worldX, worldZ);
-  if (!alreadyCut) {
+  if (u < 0 || u > 1 || v < 0 || v > 1) return clipsThisFrame;
+  const idx = mowCellIdx(worldX, worldZ);
+  const recentlyCut = mowCells[idx] > 0 && (mowElapsed - mowCells[idx]) < 3.0;
+  if (!recentlyCut && clipsThisFrame < 3) {
     spawnClips(worldX, worldZ, 1.0);
     fireCutSnip();
+    clipsThisFrame++;
   }
+  mowCellMark(worldX, worldZ);
+  return clipsThisFrame;
 }
 
 function swapMowRT() {
@@ -671,22 +666,36 @@ function updateMow(safeDelta) {
     const endV = cursorTrailUV.y;
     const startU = prevMowUV.x;
     const startV = prevMowUV.y;
-    const aspect = mowMaterial.uniforms.uFieldAspect.value;
-    const du = (endU - startU) * aspect;
-    const dv = endV - startV;
-    const dist = Math.hypot(du, dv);
-    const brush = mowMaterial.uniforms.uBrushSize.value;
-    const stepLen = brush * 0.25;
-    const steps = Math.min(48, Math.max(1, Math.ceil(dist / stepLen)));
-
     const fieldW = fieldMaxX - fieldMinX;
     const fieldD = fieldMaxZ - fieldMinZ;
+    const brush = mowMaterial.uniforms.uBrushSize.value;
+    const distWorld = Math.hypot(
+      (endU - startU) * fieldW,
+      (endV - startV) * fieldD
+    );
+    const stepLenWorld = brush * 0.25 * Math.min(fieldW, fieldD);
+    const steps = Math.min(48, Math.max(1, Math.ceil(distWorld / stepLenWorld)));
+
+    const brushRadius = brush * 0.6;
+    const pad = 2;
+    let clipsThisFrame = 0;
     for (let i = 1; i <= steps; i++) {
       const t0 = (i - 1) / steps;
       const t1 = i / steps;
       const u1 = startU + (endU - startU) * t1;
       const v1 = startV + (endV - startV) * t1;
-      applyMowAtPoint(fieldMinX + u1 * fieldW, fieldMinZ + v1 * fieldD);
+      if (i === 1) {
+        const u0 = startU + (endU - startU) * t0;
+        const v0 = startV + (endV - startV) * t0;
+        clipsThisFrame = applyMowAtPoint(fieldMinX + u0 * fieldW, fieldMinZ + v0 * fieldD, distWorld, clipsThisFrame);
+      }
+      clipsThisFrame = applyMowAtPoint(fieldMinX + u1 * fieldW, fieldMinZ + v1 * fieldD, distWorld, clipsThisFrame);
+      const bx = Math.floor((u1 - brushRadius) * 256) - pad;
+      const by = Math.floor((v1 - brushRadius) * 256) - pad;
+      const bw = Math.ceil(brushRadius * 2 * 256) + pad * 2;
+      const bh = Math.ceil(brushRadius * 2 * 256) + pad * 2;
+      renderer.setScissorTest(true);
+      renderer.setScissor(Math.max(0, bx), Math.max(0, by), Math.min(256, bw), Math.min(256, bh));
       renderMowPass(
         startU + (endU - startU) * t1,
         startV + (endV - startV) * t1,
@@ -694,6 +703,7 @@ function updateMow(safeDelta) {
         startV + (endV - startV) * t0,
         true, false
       );
+      renderer.setScissorTest(false);
     }
     prevMowUV.set(endU, endV);
   } else if (onGrass) {
@@ -805,6 +815,7 @@ let cricketMasterGain;
 let cutDragSrc  = null;
 let cutDragGain = null;
 let lastSnipTime = 0;
+let lastClipTime = 0;
 let lastMouseX = 0;
 let lastMouseY = 0;
 let smoothVelocity = 0;
@@ -1326,61 +1337,63 @@ function updateTrail() {
 
 const scene = new THREE.Scene();
 
-const CAM_INTRO_START_Y = 34.0;
-const CAM_INTRO_START_Z = 13.5;
 const CAM_INTRO_END_Y = 18;
 const CAM_INTRO_END_Z = 4;
 const CAM_LOOK_Y = 1.0;
 const CAM_LOOK_Z = -29;
-const CAM_INTRO_START_FOV = 43;
 const CAM_INTRO_END_FOV = 35;
-const FIELD_MARGIN = 0.30;
 const FIELD_REFERENCE_ASPECT = 16 / 9;
 
 function computeFieldBounds() {
-  const boundsCam = new THREE.PerspectiveCamera(
-    CAM_INTRO_END_FOV, FIELD_REFERENCE_ASPECT, 0.1, 200
-  );
-  boundsCam.position.set(0, CAM_INTRO_END_Y, CAM_INTRO_END_Z);
-  boundsCam.lookAt(0, CAM_LOOK_Y, CAM_LOOK_Z);
-  boundsCam.updateProjectionMatrix();
-  boundsCam.updateMatrixWorld(true);
-
   const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   const boundsRaycaster = new THREE.Raycaster();
-  const hits = [];
 
-  for (let xi = -1; xi <= 1; xi++) {
-    for (let yi = -1; yi <= 1; yi++) {
-      boundsRaycaster.setFromCamera(new THREE.Vector2(xi, yi), boundsCam);
-      if (boundsRaycaster.ray.direction.y >= -0.001) continue;
-      const pt = new THREE.Vector3();
-      if (!boundsRaycaster.ray.intersectPlane(plane, pt)) continue;
-      hits.push(pt);
+  function frustumGroundRect(camY, camZ, fov) {
+    const boundsCam = new THREE.PerspectiveCamera(
+      fov, FIELD_REFERENCE_ASPECT, 0.1, 200
+    );
+    boundsCam.position.set(0, camY, camZ);
+    boundsCam.lookAt(0, CAM_LOOK_Y, CAM_LOOK_Z);
+    boundsCam.updateProjectionMatrix();
+    boundsCam.updateMatrixWorld(true);
+
+    const hits = [];
+    for (let xi = -1; xi <= 1; xi++) {
+      for (let yi = -1; yi <= 1; yi++) {
+        boundsRaycaster.setFromCamera(new THREE.Vector2(xi, yi), boundsCam);
+        if (boundsRaycaster.ray.direction.y >= -0.001) continue;
+        const pt = new THREE.Vector3();
+        if (!boundsRaycaster.ray.intersectPlane(plane, pt)) continue;
+        hits.push(pt);
+      }
     }
+
+    const xs = hits.map(p => p.x);
+    const zs = hits.map(p => p.z);
+    return {
+      minX: Math.min(...xs),
+      maxX: Math.max(...xs),
+      minZ: Math.min(...zs),
+      maxZ: Math.max(...zs),
+    };
   }
 
-  const xs = hits.map(p => p.x);
-  const zs = hits.map(p => p.z);
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minZ = Math.min(...zs);
-  const maxZ = Math.max(...zs);
-  const visW = maxX - minX;
-  const visD = maxZ - minZ;
-  fieldMinX = minX - visW * FIELD_MARGIN;
-  fieldMaxX = maxX + visW * FIELD_MARGIN;
-  fieldMinZ = minZ - visD * FIELD_MARGIN;
-  fieldMaxZ = maxZ + visD * FIELD_MARGIN;
+  const locked = frustumGroundRect(CAM_INTRO_END_Y, CAM_INTRO_END_Z, CAM_INTRO_END_FOV);
+  const visW = locked.maxX - locked.minX;
+  const visD = locked.maxZ - locked.minZ;
+  fieldMinX = locked.minX - visW * 0.06;
+  fieldMaxX = locked.maxX + visW * 0.06;
+  fieldMinZ = locked.minZ - visD * 0.06;
+  fieldMaxZ = locked.maxZ + visD * 0.06;
 }
 
 const camera = new THREE.PerspectiveCamera(
-  CAM_INTRO_START_FOV,
+  CAM_INTRO_END_FOV,
   window.innerWidth / window.innerHeight,
   0.1,
   200
 );
-camera.position.set(0, CAM_INTRO_START_Y, CAM_INTRO_START_Z);
+camera.position.set(0, CAM_INTRO_END_Y, CAM_INTRO_END_Z);
 camera.lookAt(0, CAM_LOOK_Y, CAM_LOOK_Z);
 
 function updateRendererSize() {
@@ -1412,11 +1425,10 @@ uniform sampler2D uTrail;
 uniform float uCursorSpeed;
 uniform float uTrailStrengthX;
 uniform float uTrailStrengthZ;
-uniform float uTrailSpring;
 uniform float uFieldMinX;
-uniform float uFieldMaxX;
 uniform float uFieldMinZ;
-uniform float uFieldMaxZ;
+uniform float uFieldInvW;
+uniform float uFieldInvD;
 uniform sampler2D uMowMap;
 uniform float uCutHeight;
 
@@ -1448,11 +1460,11 @@ void main() {
   float instanceX = instanceMatrix[3][0];
   float instanceZ = instanceMatrix[3][2];
 
-  vec2 mowUV = vec2(
-    (instanceX - uFieldMinX) / (uFieldMaxX - uFieldMinX),
-    (instanceZ - uFieldMinZ) / (uFieldMaxZ - uFieldMinZ)
+  vec2 fieldUV = vec2(
+    (instanceX - uFieldMinX) * uFieldInvW,
+    (instanceZ - uFieldMinZ) * uFieldInvD
   );
-  float mowIntensity = texture2D(uMowMap, mowUV).r;
+  float mowIntensity = texture2D(uMowMap, fieldUV).r;
   // Cut phase (0.5-1.0): stays at 50% height.
   // Regrowth phase (0.0-0.5): linearly returns to full height.
   float effectiveHeightScale;
@@ -1474,10 +1486,6 @@ void main() {
   float windUvY = mowIntensity > 0.01 ? min(uv.y, effectiveHeightScale) : uv.y;
   float windStrength = pow(windUvY, 2.0);
 
-  vec2 fieldUV = vec2(
-    (instanceX - uFieldMinX) / (uFieldMaxX - uFieldMinX),
-    (instanceZ - uFieldMinZ) / (uFieldMaxZ - uFieldMinZ)
-  );
   vec4 trailSample = texture2D(uTrail, fieldUV);
   float trailIntensity = trailSample.b;
   vec2 trailDir = trailSample.rg * 2.0 - 1.0;
@@ -1486,31 +1494,39 @@ void main() {
   transformed.x += trailDir.x * push;
   transformed.z += trailDir.y * push;
 
-  float projectedPos = instanceX * uGustDirX + instanceZ * uGustDirZ;
-  float distFromFront = projectedPos - uGustFrontX;
-
-  float lead = 1.0 - smoothstep(-15.0, 0.0, distFromFront);
-  float trailEdge = smoothstep(-uGustWidth, -uGustWidth * 0.5, distFromFront);
-  float inGust = lead * trailEdge * uGustBlend;
-
   float t = uTime;
   float rPhase = aRandom * 6.2832;
-  float freqVar = 0.7 + aHeight * 0.5 + aRandom * 0.3;
 
-  float scroll = instanceX * uGustDirX + instanceZ * uGustDirZ;
-  float cross = -instanceZ * uGustDirX + instanceX * uGustDirZ;
+  float gustDispX = 0.0;
+  float gustDispZ = 0.0;
+  if (uGustBlend > 0.001 && abs(uGustStrength) > 0.001) {
+    float projectedPos = instanceX * uGustDirX + instanceZ * uGustDirZ;
+    float distFromFront = projectedPos - uGustFrontX;
 
-  float patchA = sin(scroll * 0.09 + rPhase * 0.2) * sin(cross * 0.07 + rPhase * 0.3 + 1.4);
-  float baseLean = 0.9 + patchA * 0.3;
-  float baseDisp = baseLean * uGustStrength;
+    float lead = 1.0 - smoothstep(-15.0, 0.0, distFromFront);
+    float trailEdge = smoothstep(-uGustWidth, -uGustWidth * 0.5, distFromFront);
+    float inGust = lead * trailEdge * uGustBlend;
 
-  float turbAmp = uGustStrength * 0.15;
-  float turb = sin(scroll * 0.19 + t * 1.2 * freqVar + rPhase) * 0.6
-             + sin(cross * 0.14 + t * 0.8 * freqVar + rPhase * 0.7 + 2.1) * 0.4;
-  float turbDisp = turb * turbAmp;
+    float freqVar = 0.7 + aHeight * 0.5 + aRandom * 0.3;
 
-  float crossDisp = sin(cross * 0.11 + t * 0.6 + rPhase * 0.5 + 1.8)
-                  * uGustStrength * 0.12;
+    float scroll = instanceX * uGustDirX + instanceZ * uGustDirZ;
+    float cross = -instanceZ * uGustDirX + instanceX * uGustDirZ;
+
+    float patchA = sin(scroll * 0.09 + rPhase * 0.2) * sin(cross * 0.07 + rPhase * 0.3 + 1.4);
+    float baseLean = 0.9 + patchA * 0.3;
+    float baseDisp = baseLean * uGustStrength;
+
+    float turbAmp = uGustStrength * 0.15;
+    float turb = sin(scroll * 0.19 + t * 1.2 * freqVar + rPhase) * 0.6
+               + sin(cross * 0.14 + t * 0.8 * freqVar + rPhase * 0.7 + 2.1) * 0.4;
+    float turbDisp = turb * turbAmp;
+
+    float crossDisp = sin(cross * 0.11 + t * 0.6 + rPhase * 0.5 + 1.8)
+                    * uGustStrength * 0.12;
+
+    gustDispX = inGust * (baseDisp + turbDisp) * windStrength * aHeight * effectiveScale;
+    gustDispZ = inGust * crossDisp * windStrength * aHeight * effectiveScale;
+  }
 
   float px = instanceX * 0.0613 + instanceZ * 0.0421;
   float ambientFreq = 0.4 + aHeight * 0.4 + aRandom * 0.2;
@@ -1526,9 +1542,6 @@ void main() {
                       * (0.85 + sin(ambientScroll * 0.04 + t * 0.22 + rPhase * 0.3) * 0.15);
 
   // Gust displacement — rotates with gust direction
-  float gustDispX = inGust * (baseDisp + turbDisp) * windStrength * aHeight * effectiveScale;
-  float gustDispZ = inGust * crossDisp * windStrength * aHeight * effectiveScale;
-
   // Ambient displacement — always in fixed ambient direction, independent of gust
   float ambWindX = (ambientBreeze + ambientX) * windStrength * aHeight * effectiveScale;
 
@@ -1563,12 +1576,7 @@ uniform vec3 uBentTipLo;
 uniform vec3 uBentTipHi;
 uniform float uFieldMinZ;
 uniform float uFieldMaxZ;
-uniform float uFFGrassFalloff;
-uniform float uFFGrassScale;
 uniform vec3 uHazeColor;
-uniform vec3 uFFGrassTint;
-uniform vec3 uFFLightPos[12];
-uniform float uFFLightBri[12];
 varying vec2 vUv;
 varying float vRandom;
 varying vec2 vWorldNormal;
@@ -1602,7 +1610,7 @@ void main() {
   float ao = smoothstep(0.0, 0.25, vUv.y);
   col *= (uAOMin + (1.0 - uAOMin) * ao);
 
-  float sunDot = dot(normalize(vWorldNormal), normalize(uSunDir));
+  float sunDot = dot(normalize(vWorldNormal), uSunDir);
   float light = uLightMin + (1.0 - uLightMin) * sunDot;
   col *= light;
 
@@ -1612,16 +1620,6 @@ void main() {
 
   float depthT = clamp((vWorldPos.z - uFieldMinZ) / (uFieldMaxZ - uFieldMinZ), 0.0, 1.0);
   col = mix(uHazeColor, col, 0.55 + depthT * 0.45);
-
-  float ffLight = 0.0;
-  for (int i = 0; i < 12; i++) {
-    if (uFFLightBri[i] < 0.01) continue;
-    vec3 delta = uFFLightPos[i] - vWorldPos;
-    float dist2 = dot(delta, delta);
-    ffLight += uFFLightBri[i] * (1.0 / (1.0 + dist2 * uFFGrassFalloff));
-  }
-  ffLight = clamp(ffLight * uFFGrassScale, 0.0, 0.25);
-  col += uFFGrassTint * ffLight;
 
   float cutAmt = clamp((vMow - 0.35) * (1.0 / 0.2), 0.0, 1.0);
   if (cutAmt > 0.001) {
@@ -1652,20 +1650,16 @@ const grassMaterial = new THREE.ShaderMaterial({
     uAmbientStrength: { value: 0.18 },
     uAmbientDirX:     { value: 0.92 },
     uAmbientDirZ:     { value: 0.38 },
-    uWindSpeed:       { value: 0.75 },
-    uWindStrength:    { value: 0.8 },
-    uTurbulence:      { value: 0.3 },
-    uWindDir:         { value: 0.125 },
     uTrail:           { value: trailRead.texture },
     uMowMap:          { value: mowRead.texture },
     uCutHeight:       { value: 0.5 },
     uCursorSpeed:     { value: 0 },
     uTrailStrengthX:  { value: 0.8 },
     uTrailStrengthZ:  { value: 0.8 },
-    uTrailSpring:     { value: 0 },
     uFieldMinX:       { value: 0 },
-    uFieldMaxX:       { value: 0 },
     uFieldMinZ:       { value: 0 },
+    uFieldInvW:       { value: 0 },
+    uFieldInvD:       { value: 0 },
     uFieldMaxZ:       { value: 0 },
     uBaseColor:       { value: new THREE.Vector3(58 / 255, 100 / 255, 40 / 255) },
     uMidColor:        { value: new THREE.Vector3(78 / 255, 130 / 255, 48 / 255) },
@@ -1679,16 +1673,12 @@ const grassMaterial = new THREE.ShaderMaterial({
     uBentMid:         { value: new THREE.Color(42 / 255, 78 / 255, 25 / 255) },
     uBentTipLo:       { value: new THREE.Color(65 / 255, 118 / 255, 40 / 255) },
     uBentTipHi:       { value: new THREE.Color(90 / 255, 152 / 255, 58 / 255) },
-    uFFLightPos:      { value: new Float32Array(12 * 3) },
-    uFFLightBri:      { value: new Float32Array(12) },
-    uFFGrassFalloff:  { value: FF_GRASS_FALLOFF },
-    uFFGrassScale:    { value: FF_GRASS_SCALE },
     uHazeColor:       { value: new THREE.Vector3(0.13, 0.22, 0.09) },
-    uFFGrassTint:     { value: new THREE.Vector3(0.45, 0.72, 0.15) },
   },
 });
 
 computeFieldBounds();
+
 console.log(
   'Field bounds (fixed, aspect', FIELD_REFERENCE_ASPECT.toFixed(3) + '):',
   fieldMinX, fieldMaxX, fieldMinZ, fieldMaxZ
@@ -1699,9 +1689,11 @@ trailMaterial.uniforms.uFieldAspect.value = fieldAspect;
 mowMaterial.uniforms.uFieldAspect.value = fieldAspect;
 
 grassMaterial.uniforms.uFieldMinX.value = fieldMinX;
-grassMaterial.uniforms.uFieldMaxX.value = fieldMaxX;
 grassMaterial.uniforms.uFieldMinZ.value = fieldMinZ;
+grassMaterial.uniforms.uFieldInvW.value = 1.0 / (fieldMaxX - fieldMinX);
+grassMaterial.uniforms.uFieldInvD.value = 1.0 / (fieldMaxZ - fieldMinZ);
 grassMaterial.uniforms.uFieldMaxZ.value = fieldMaxZ;
+grassMaterial.uniforms.uSunDir.value.normalize();
 
 const bladeGeoNear = new THREE.PlaneGeometry(1, 1, 1, 3);
 bladeGeoNear.translate(0, 0.5, 0);
@@ -1736,12 +1728,16 @@ bladeGeoVeryFar.setAttribute('aWidth',  new THREE.InstancedBufferAttribute(aWidt
 bladeGeoVeryFar.setAttribute('aLean',   new THREE.InstancedBufferAttribute(aLeanVeryFar, 1));
 bladeGeoVeryFar.setAttribute('aRandom', new THREE.InstancedBufferAttribute(aRandomVeryFar, 1));
 
+const grassMaterialFar = grassMaterial.clone();
+grassMaterialFar.side = THREE.FrontSide;
+grassMaterialFar.uniforms = grassMaterial.uniforms;
+
 const grassMaterialVeryFar = grassMaterial.clone();
 grassMaterialVeryFar.side = THREE.FrontSide;
 grassMaterialVeryFar.uniforms = grassMaterial.uniforms;
 
 const grassNear    = new THREE.InstancedMesh(bladeGeoNear,    grassMaterial, BLADE_NEAR);
-const grassFar     = new THREE.InstancedMesh(bladeGeoFar,     grassMaterial, BLADE_FAR);
+const grassFar     = new THREE.InstancedMesh(bladeGeoFar,     grassMaterialFar, BLADE_FAR);
 const grassVeryFar = new THREE.InstancedMesh(bladeGeoVeryFar, grassMaterialVeryFar, BLADE_VERY_FAR);
 const dummy = new THREE.Object3D();
 
@@ -1751,7 +1747,7 @@ const slotW = (fieldMaxX - fieldMinX) / cols;
 for (let n = 0; n < BLADE_NEAR; n++) {
   const col = n % cols;
   const x   = fieldMinX + (col + Math.random()) * slotW;
-  const zT  = 0.28 + Math.pow(Math.random(), 0.22) * 0.62;
+  const zT  = 0.28 + Math.pow(Math.random(), 0.22) * 0.72;
   const z   = fieldMinZ + zT * (fieldMaxZ - fieldMinZ);
   const depthT  = (z - fieldMinZ) / (fieldMaxZ - fieldMinZ);
   const height  = 0.4 + Math.random() * 0.8;
@@ -1789,6 +1785,7 @@ for (let f = 0; f < BLADE_FAR; f++) {
   dummy.updateMatrix();
   grassFar.setMatrixAt(f, dummy.matrix);
 }
+
 console.log(
   'grassFar Z: zT = Math.pow(Math.random(), 2.2) * 0.88 — range [0, 0.88], biased toward fieldMinZ (far)'
 );
@@ -1813,6 +1810,7 @@ for (let v = 0; v < BLADE_VERY_FAR; v++) {
   dummy.updateMatrix();
   grassVeryFar.setMatrixAt(v, dummy.matrix);
 }
+
 console.log(
   'grassVeryFar: 90k blades, 1 segment, zT = pow(random, 3.5) * 0.60'
 );
@@ -1886,7 +1884,6 @@ const DAY_SNAPSHOT = {
   bentTipLo: grassMaterial.uniforms.uBentTipLo.value.clone(),
   bentTipHi: grassMaterial.uniforms.uBentTipHi.value.clone(),
   hazeColor: grassMaterial.uniforms.uHazeColor.value.clone(),
-  ffGrassTint: grassMaterial.uniforms.uFFGrassTint.value.clone(),
 };
 
 let isNight = false;
@@ -1920,7 +1917,6 @@ function snapshotTOD() {
     groundNear: groundMaterial.uniforms.uGroundNear.value.clone(),
     groundFar:  groundMaterial.uniforms.uGroundFar.value.clone(),
     hazeColor:  u.uHazeColor.value.clone(),
-    ffGrassTint: u.uFFGrassTint.value.clone(),
   };
 }
 
@@ -1993,7 +1989,6 @@ function applyTOD() {
       groundNear: new THREE.Color(0x03050c),
       groundFar:  new THREE.Color().setRGB(0.078, 0.135, 0.207),
       hazeColor:  new THREE.Vector3(0.08, 0.10, 0.18),
-      ffGrassTint: new THREE.Vector3(0.25, 0.35, 0.55),
     };
     fireflyFadeT = 0.0;
     fireflyMaterial.uniforms.uVisible.value = 0.0;
@@ -2018,7 +2013,6 @@ function applyTOD() {
       groundNear: DAY_SNAPSHOT.groundNear.clone(),
       groundFar:  DAY_SNAPSHOT.groundFar.clone(),
       hazeColor:  DAY_SNAPSHOT.hazeColor.clone(),
-      ffGrassTint: DAY_SNAPSHOT.ffGrassTint.clone(),
     };
     fireflyFadeT = fireflyMaterial.uniforms.uVisible.value;
     fireflyDelay = 0.0;
@@ -2046,6 +2040,8 @@ const ffSlots = Array.from({ length: FF_LIGHT_SLOTS }, () => ({
   fireflyIndex: null,
   bri: 0,
 }));
+const _ffOccupiedSet = new Set();
+const _ffCandidates = [];
 
 function resetFireflyGrassSlots() {
   for (let s = 0; s < FF_LIGHT_SLOTS; s++) {
@@ -2054,7 +2050,9 @@ function resetFireflyGrassSlots() {
   }
 }
 
-function updateFireflyGrassLights(delta) {
+function updateFireflyGlowInstances(delta) {
+  if (fireflyFadeT === 0.0 && !isNight) return;
+
   for (let i = 0; i < FIREFLY_COUNT; i++) {
     const b = ff[i].brightness;
     if (!ff[i].ffInSet && b > FF_SET_ENTER) ff[i].ffInSet = true;
@@ -2079,40 +2077,91 @@ function updateFireflyGrassLights(delta) {
     }
   }
 
-  const occupied = new Set();
+  _ffOccupiedSet.clear();
   for (let s = 0; s < FF_LIGHT_SLOTS; s++) {
-    if (ffSlots[s].fireflyIndex !== null) occupied.add(ffSlots[s].fireflyIndex);
+    if (ffSlots[s].fireflyIndex !== null) _ffOccupiedSet.add(ffSlots[s].fireflyIndex);
   }
 
-  const candidates = [];
+  _ffCandidates.length = 0;
   for (let i = 0; i < FIREFLY_COUNT; i++) {
-    if (ff[i].ffInSet && !occupied.has(i)) candidates.push(i);
+    if (ff[i].ffInSet && !_ffOccupiedSet.has(i)) _ffCandidates.push(i);
   }
-  candidates.sort((a, b) => ff[b].brightness - ff[a].brightness);
+  _ffCandidates.sort((a, b) => {
+    const da = Math.hypot(ff[a].x - camera.position.x, ff[a].y - camera.position.y, ff[a].z - camera.position.z);
+    const db = Math.hypot(ff[b].x - camera.position.x, ff[b].y - camera.position.y, ff[b].z - camera.position.z);
+    return da - db;
+  });
 
   let ci = 0;
-  for (let s = 0; s < FF_LIGHT_SLOTS && ci < candidates.length; s++) {
+  for (let s = 0; s < FF_LIGHT_SLOTS && ci < _ffCandidates.length; s++) {
     if (ffSlots[s].fireflyIndex === null) {
-      ffSlots[s].fireflyIndex = candidates[ci++];
+      ffSlots[s].fireflyIndex = _ffCandidates[ci++];
       ffSlots[s].bri = 0;
     }
   }
 
-  const ffLightPos = new Float32Array(FF_LIGHT_SLOTS * 3);
-  const ffLightBri = new Float32Array(FF_LIGHT_SLOTS);
   for (let s = 0; s < FF_LIGHT_SLOTS; s++) {
     const slot = ffSlots[s];
-    if (slot.fireflyIndex !== null) {
+    if (slot.fireflyIndex === null || slot.bri < 0.01) {
+      _glowDummy.position.set(-9999, 0, 0);
+      _glowDummy.scale.setScalar(1);
+    } else {
       const f = ff[slot.fireflyIndex];
-      ffLightPos[s * 3]     = f.x;
-      ffLightPos[s * 3 + 1] = f.y;
-      ffLightPos[s * 3 + 2] = f.z;
-      ffLightBri[s]         = slot.bri;
+      _glowDummy.position.set(f.x, 0.02, f.z);
+      _glowDummy.scale.setScalar(slot.bri);
     }
+    _glowDummy.rotation.set(0, 0, 0);
+    _glowDummy.updateMatrix();
+    fireflyGlowMesh.setMatrixAt(s, _glowDummy.matrix);
   }
-  grassMaterial.uniforms.uFFLightPos.value = ffLightPos;
-  grassMaterial.uniforms.uFFLightBri.value = ffLightBri;
+  fireflyGlowMesh.instanceMatrix.needsUpdate = true;
 }
+
+const fireflyGlowGeo = new THREE.PlaneGeometry(4, 4);
+fireflyGlowGeo.rotateX(-Math.PI / 2);
+
+const fireflyGlowMat = new THREE.ShaderMaterial({
+  uniforms: {
+    projectionMatrix: { value: camera.projectionMatrix },
+    modelViewMatrix:  { value: new THREE.Matrix4() },
+    uGlowColor:       { value: new THREE.Vector3(0.45, 0.72, 0.15) },
+    uGlowIntensity:   { value: 0.0 },
+    uVisible:         { value: 0.0 },
+  },
+  vertexShader: /* glsl */`
+    attribute mat4 instanceMatrix;
+    varying vec2 vUv;
+    varying vec3 vWorldPos;
+
+    void main() {
+      vUv = uv;
+      vec4 worldPos = instanceMatrix * vec4(position, 1.0);
+      vWorldPos = worldPos.xyz;
+      gl_Position = projectionMatrix * modelViewMatrix * worldPos;
+    }
+  `,
+  fragmentShader: /* glsl */`
+    uniform vec3 uGlowColor;
+    uniform float uGlowIntensity;
+    varying vec2 vUv;
+
+    void main() {
+      float r = length(vUv - vec2(0.5));
+      float glow = smoothstep(0.5, 0.0, r);
+      glow = pow(glow, 2.5);
+      gl_FragColor = vec4(uGlowColor * glow * uGlowIntensity, glow * uGlowIntensity);
+    }
+  `,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending,
+  side: THREE.FrontSide,
+});
+
+const _glowDummy = new THREE.Object3D();
+const fireflyGlowMesh = new THREE.InstancedMesh(fireflyGlowGeo, fireflyGlowMat, FF_LIGHT_SLOTS);
+fireflyGlowMesh.frustumCulled = false;
+scene.add(fireflyGlowMesh);
 
 const fireflyMaterial = new THREE.ShaderMaterial({
   uniforms: {
@@ -2262,7 +2311,7 @@ if (devMode) {
   const ffHeader = document.createElement('button');
   ffHeader.type = 'button';
   ffHeader.className = 'ff-dev-header';
-  ffHeader.setAttribute('aria-expanded', 'true');
+  ffHeader.setAttribute('aria-expanded', 'false');
   const ffHeaderTitle = document.createElement('span');
   ffHeaderTitle.textContent = 'Fireflies (dev)';
   const ffChevron = document.createElement('span');
@@ -2272,6 +2321,7 @@ if (devMode) {
   const ffBody = document.createElement('div');
   ffBody.className = 'ff-dev-body';
   ffPanel.append(ffHeader, ffBody);
+  ffPanel.classList.add('ff-dev-collapsed');
   ffHeader.addEventListener('click', () => {
     const collapsed = ffPanel.classList.toggle('ff-dev-collapsed');
     ffHeader.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
@@ -2281,8 +2331,6 @@ if (devMode) {
     fireflyMaterial.uniforms.uFFSizeBase.value = FF_SIZE_BASE;
     fireflyMaterial.uniforms.uFFBriMin.value   = FF_BRI_MIN;
     fireflyMaterial.uniforms.uFFBriRange.value = FF_BRI_RANGE;
-    grassMaterial.uniforms.uFFGrassFalloff.value = FF_GRASS_FALLOFF;
-    grassMaterial.uniforms.uFFGrassScale.value   = FF_GRASS_SCALE;
   }
 
   function addSlider(label, getVal, setVal, min, max, step) {
@@ -2467,6 +2515,7 @@ const clips = Array.from({ length: CLIP_COUNT }, () => ({
   height: 0, width: 0, lean: 0,
 }));
 let clipIdx = 0;
+const activeClips = [];
 
 function spawnClips(wx, wz, fraction) {
   const brushRadius = trailMaterial.uniforms.uBrushSize.value
@@ -2474,13 +2523,16 @@ function spawnClips(wx, wz, fraction) {
   const count = Math.max(5, Math.round((18 + Math.floor(Math.random() * 12)) * (fraction || 1.0)));
 
   for (let i = 0; i < count; i++) {
-    const c = clips[clipIdx % CLIP_COUNT];
+    const idx = clipIdx % CLIP_COUNT;
+    const c = clips[idx];
+    const wasActive = c.active;
     clipIdx++;
 
     const angle = Math.random() * Math.PI * 2;
     const r     = Math.random() * brushRadius;
 
     c.active  = true;
+    if (!wasActive) activeClips.push(idx);
     c.x       = wx + Math.cos(angle) * r;
     c.z       = wz + Math.sin(angle) * r;
     const origH = 0.4 + Math.random() * 0.8;
@@ -2570,11 +2622,8 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-const INTRO_DURATION = 2.0;
 const LOADING_MIN_MS = 2000;
 let sceneReady       = false;
-let introStartTime   = null;
-const INTRO_HOLD_MS  = 1000;
 let frameReady       = false;
 let timerReady       = false;
 
@@ -2582,6 +2631,8 @@ camera.updateProjectionMatrix();
 
 function updateFireflies(delta, elapsed, gustStrength, gustDirX, gustDirZ,
                           cursorX, cursorZ, cursorSpeed, cursorOnGrass) {
+  if (fireflyFadeT === 0.0 && !isNight) return;
+
   const spawnThreshold = 4.0;
   if (cursorOnGrass && cursorSpeed > spawnThreshold && Math.random() < cursorSpeed * 0.012) {
     for (let s = FIREFLY_PERMANENT; s < FIREFLY_COUNT; s++) {
@@ -2715,22 +2766,17 @@ function updateFireflies(delta, elapsed, gustStrength, gustDirX, gustDirZ,
 }
 
 function updateClips(delta) {
-  for (let i = 0; i < CLIP_COUNT; i++) {
-    const c = clips[i];
+  if (activeClips.length === 0) return;
 
-    if (!c.active) {
-      clipAlphaArr[i] = 0;
-      _cd.position.set(0, -999, 0);
-      _cd.scale.setScalar(0.001);
-      _cd.updateMatrix();
-      clipMesh.setMatrixAt(i, _cd.matrix);
-      continue;
-    }
+  for (let ai = activeClips.length - 1; ai >= 0; ai--) {
+    const i = activeClips[ai];
+    const c = clips[i];
 
     c.age += delta;
     if (c.age >= c.maxAge || c.y < 0) {
       c.active = false;
       clipAlphaArr[i] = 0;
+      activeClips.splice(ai, 1);
       continue;
     }
 
@@ -2758,11 +2804,13 @@ function updateClips(delta) {
     clipMesh.setMatrixAt(i, _cd.matrix);
   }
 
-  clipMesh.instanceMatrix.needsUpdate = true;
-  clipBladeGeo.attributes.aClipHeight.needsUpdate = true;
-  clipBladeGeo.attributes.aClipWidth.needsUpdate  = true;
-  clipBladeGeo.attributes.aClipLean.needsUpdate   = true;
-  clipBladeGeo.attributes.aClipAlpha.needsUpdate  = true;
+  if (activeClips.length > 0) {
+    clipMesh.instanceMatrix.needsUpdate = true;
+    clipBladeGeo.attributes.aClipHeight.needsUpdate = true;
+    clipBladeGeo.attributes.aClipWidth.needsUpdate  = true;
+    clipBladeGeo.attributes.aClipLean.needsUpdate   = true;
+    clipBladeGeo.attributes.aClipAlpha.needsUpdate  = true;
+  }
 }
 
 // ── Render loop ─────────────────────────────────────────────────────────────
@@ -2772,8 +2820,9 @@ function hideLoadingScreen() {
   if (!overlay) return;
   sceneReady = true;
   overlay.classList.add('hidden');
+  customCursor.style.display = 'block';
+  customCursor.style.opacity = '1';
   setTimeout(() => overlay.remove(), 900);
-  setTimeout(() => { introStartTime = performance.now(); }, INTRO_HOLD_MS);
 }
 
 function tryHideLoader() {
@@ -2805,19 +2854,6 @@ function animate() {
   const delta = clock.getDelta();
   const safeDelta = Math.min(delta, 0.05);
   const elapsed = clock.elapsedTime;
-
-  if (introStartTime !== null) {
-    const introElapsed = (performance.now() - introStartTime) / 1000;
-    const t = Math.min(1, introElapsed / INTRO_DURATION);
-    if (t < 1) {
-      const ease = 1 - Math.pow(1 - t, 3);
-      camera.position.y = CAM_INTRO_START_Y + (CAM_INTRO_END_Y - CAM_INTRO_START_Y) * ease;
-      camera.position.z = CAM_INTRO_START_Z + (CAM_INTRO_END_Z - CAM_INTRO_START_Z) * ease;
-      camera.fov = CAM_INTRO_START_FOV + (CAM_INTRO_END_FOV - CAM_INTRO_START_FOV) * ease;
-      camera.lookAt(0, CAM_LOOK_Y, CAM_LOOK_Z);
-      camera.updateProjectionMatrix();
-    }
-  }
 
   updateGust(safeDelta);
 
@@ -2869,10 +2905,10 @@ function animate() {
     u.uBentTipHi.value.lerpColors(transitionFrom.bentTipHi,transitionTo.bentTipHi,ease);
     u.uSpecColor.value.lerpVectors(transitionFrom.spec,    transitionTo.spec,      ease);
     u.uSunDir.value.lerpVectors(transitionFrom.sunDir,     transitionTo.sunDir,    ease);
+    u.uSunDir.value.normalize();
     u.uLightMin.value = transitionFrom.lightMin + (transitionTo.lightMin - transitionFrom.lightMin) * ease;
     u.uAOMin.value    = transitionFrom.aoMin    + (transitionTo.aoMin    - transitionFrom.aoMin)    * ease;
     u.uHazeColor.value.lerpVectors(transitionFrom.hazeColor, transitionTo.hazeColor, ease);
-    u.uFFGrassTint.value.lerpVectors(transitionFrom.ffGrassTint, transitionTo.ffGrassTint, ease);
 
     const skyNow = new THREE.Color().lerpColors(transitionFrom.sky, transitionTo.sky, ease);
     renderer.setClearColor(skyNow);
@@ -2894,6 +2930,8 @@ function animate() {
     fireflyFadeT = Math.max(0.0, fireflyFadeT - safeDelta / 3.0);
   }
   fireflyMaterial.uniforms.uVisible.value = fireflyFadeT;
+  fireflyGlowMat.uniforms.uGlowIntensity.value = fireflyFadeT;
+  fireflyGlowMat.uniforms.uVisible.value = fireflyFadeT;
 
   updateCursorDirection();
   updateCustomCursorScale();
@@ -2911,8 +2949,6 @@ function animate() {
   }
   updateAudioFromTrail();
 
-  grassMaterial.uniforms.uTrailSpring.value = 0;
-
   updateFireflies(
     safeDelta,
     elapsed,
@@ -2928,7 +2964,7 @@ function animate() {
 
   updateClips(safeDelta);
 
-  updateFireflyGrassLights(safeDelta);
+  updateFireflyGlowInstances(safeDelta);
 
   grassNear.updateMatrixWorld();
   grassFar.updateMatrixWorld();
@@ -2947,6 +2983,8 @@ function animate() {
   grassMaterial.uniforms.modelViewMatrix.value.copy(camera.matrixWorldInverse).multiply(grassNear.matrixWorld);
   clipMat.uniforms.projectionMatrix.value.copy(camera.projectionMatrix);
   clipMat.uniforms.modelViewMatrix.value.copy(camera.matrixWorldInverse);
+  fireflyGlowMat.uniforms.projectionMatrix.value.copy(camera.projectionMatrix);
+  fireflyGlowMat.uniforms.modelViewMatrix.value.copy(camera.matrixWorldInverse);
   renderer.render(scene, camera);
 }
 
