@@ -98,6 +98,61 @@ Lerped during TOD transition alongside grass palette (`transitionFrom.hazeColor`
 
 ---
 
+## Weather Palette Constants
+
+Four palette snapshots drive `applyWeather()`. `SUNNY_*` mirrors the TOD palette; `RAIN_*` are the wet-weather overrides. Both `todT` and `rainT` are applied as a 2D bilinear lerp each frame.
+
+### RAIN_DAY
+
+| Key | Value |
+|-----|-------|
+| `sky` | `#111a0f` |
+| `groundNear` | `#0a1209` |
+| `groundFar` | `#1a2416` |
+| `hazeColor` | `(0.12, 0.15, 0.10)` |
+| `baseColor` | `(42, 72, 28)/255` |
+| `midColor` | `(56, 88, 38)/255` |
+| `tipPale` | `(110, 148, 72)/255` |
+| `tipBright` | `(128, 165, 84)/255` |
+| `specColor` | `(0.55, 0.62, 0.45)` |
+| `lightMin` | `0.44` |
+| `aoMin` | `0.22` |
+| `sunDir` | `(0.5, 0.35)` normalised |
+| `streakColor` | `(0.55, 0.62, 0.52)` |
+
+### RAIN_NIGHT
+
+| Key | Value |
+|-----|-------|
+| `sky` | `#020408` |
+| `groundNear` | `#020408` |
+| `groundFar` | `#0d1820` |
+| `hazeColor` | `(0.07, 0.09, 0.12)` |
+| `baseColor` | `(14, 24, 32)/255` |
+| `midColor` | `(20, 34, 46)/255` |
+| `tipPale` | `(30, 52, 72)/255` |
+| `tipBright` | `(38, 62, 86)/255` |
+| `specColor` | `(0.10, 0.13, 0.22)` |
+| `lightMin` | `0.22` |
+| `aoMin` | `0.06` |
+| `sunDir` | `(0.2, 0.10)` normalised |
+| `streakColor` | `(0.18, 0.24, 0.32)` |
+
+### Rebound drop color (`uRainDropColor`)
+
+Lerped by `todT` inside `applyWeather()`:
+
+| TOD | vec3 |
+|-----|------|
+| Day rain | `(0.82, 0.88, 0.82)` — light grey-green |
+| Night rain | `(0.55, 0.62, 0.78)` — dim blue-silver |
+
+### Rain fog (`uRainFogColor`, `uRainFogStrength`)
+
+Applied in the grass and ground shaders on top of normal haze. Strength `= (0.72 – 0.07 * todT) * rainT`. Day fog colour interpolates from `hazeColor` toward a cool grey; night fog stays near `hazeColor`.
+
+---
+
 ## TOD Transition System
 
 **Duration:** 2s, quadratic ease-in-out (`TOD_TRANS_DUR`)
@@ -113,6 +168,21 @@ Lerped during TOD transition alongside grass palette (`transitionFrom.hazeColor`
 | Ground gradient (`uGroundNear` / `uGroundFar`) | Uniform `.lerpColors()` | ✅ |
 | Distance haze (`uHazeColor`) | Uniform lerp | ✅ |
 | Sun direction (`uSunDir`) | Vector lerp + **CPU normalise** each frame | ✅ |
+
+### What changes on weather toggle
+
+`applyWeather()` replaces the single TOD lerp with a 2D bilinear lerp across all four snapshots. Every lerped element above is re-resolved including rain fog, streak colour, and rebound drop colour.
+
+| Element | Mechanism |
+|---------|-----------|
+| All grass / ground / sky uniforms | `applyWeather()` 2D lerp (todT × rainT) |
+| Streak colour (`uRainColor`) | Lerped in `applyWeather()` |
+| Haze density (`uHazeDensity`) | `= rainT` directly |
+| Rain fog (`uRainFogColor`, `uRainFogStrength`) | Lerped in `applyWeather()` |
+| Rebound drop colour (`uRainDropColor`) | Lerped by `todT` in `applyWeather()` |
+| `rain.mp3` volume | Faded with `rainT` in audio loop |
+| Wind / rustle audio | Scaled by `1 - rainT` |
+| Fireflies | Suppressed when `rainT > 0` |
 
 ### Night targets (`transitionTo` when `isNight`)
 
@@ -193,6 +263,24 @@ Applied in `index.html` without intended visual/audio change:
 | Mow readback removed | `mowCellCut` no longer samples mow RT on CPU |
 
 **Reverted:** `grassNear` `FrontSide` (visible culling artefact) — stays `DoubleSide`.
+
+---
+
+## Rain Streak Visual Spec
+
+| Parameter | Value |
+|-----------|-------|
+| Count | 50,000 instanced quads |
+| Geometry (`hw` × `hh`) | `0.010` × `0.42` (local space) |
+| Fall direction (`FALL_DIR`) | `vec3(0.0, 1.0, 0.08)` — slight forward tilt, no wind lean |
+| Fall speed base | 16 world-units/s × per-instance `0.6–1.5` depth scale |
+| Spawn height | `Y = 28–34`; respawn at `Y < -1` |
+| Width (near/far) | `~2.2 px / ~1.3 px` total on 1080p |
+| Width formula | `ndcHalfH = 0.0012 + depthT * 0.0008` in NDC-height units |
+| Depth fade | `depthAlpha = 0.3 + depthT * 0.7` |
+| Haze fade | `hazeFade = clamp(0.05 + vDepthT * 0.95, 0.0, 1.0)` |
+| Blending | `AdditiveBlending`, `depthWrite: false` |
+| Perspective scale | `perspScale = 0.35 + depthT * 0.65` applied to `halfLen` |
 
 ---
 

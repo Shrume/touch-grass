@@ -45,6 +45,18 @@ canvas {
   display: none;
 }
 
+/* OS default pointer over UI chrome — overrides global cursor: none */
+.ui-btn, .ui-btn *,
+.sw, .sw *,
+#info-card, #info-card a,
+#ff-dev-panel, #ff-dev-panel button, #ff-dev-panel .ff-dev-header,
+#ff-dev-panel .ff-dev-header * {
+  cursor: pointer !important;
+}
+#sw-group {
+  cursor: default !important;
+}
+
 #fps-dev {
   display: none;
   position: fixed;
@@ -150,74 +162,156 @@ canvas {
 
 .ui-btn {
   position: fixed;
-  width: 40px; height: 40px;
-  border-radius: 50%;
+  width: 36px; height: 36px;
+  border-radius: 10px;
   background: rgba(255,255,255,0.55);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   color: rgba(0,0,0,0.75);
-  border: 1px solid rgba(255,255,255,0.30);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.35),
+  border: none;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.30),
+              0 8px 24px rgba(0,0,0,0.35),
               0 3px 8px rgba(0,0,0,0.22),
               0 1px 2px rgba(0,0,0,0.15);
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  transition: background 2s ease, border-color 2s ease,
-              box-shadow 2s ease, color 2s ease,
-              transform 0.15s;
+  transition: background 2s ease, box-shadow 2s ease, color 2s ease;
   z-index: 100;
 }
 .ui-btn:hover {
   background: rgba(255,255,255,0.70);
-  transform: scale(1.06);
-  box-shadow: 0 12px 32px rgba(0,0,0,0.40),
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.30),
+              0 12px 32px rgba(0,0,0,0.40),
               0 4px 10px rgba(0,0,0,0.25),
               0 1px 3px rgba(0,0,0,0.18);
 }
 .ui-btn.night {
   background: rgba(28, 42, 68, 0.90);
-  border: 1px solid rgba(140, 170, 220, 0.30);
-  box-shadow: 0 8px 28px rgba(0,0,0,0.65),
+  box-shadow: inset 0 0 0 1px rgba(140, 170, 220, 0.30),
+              0 8px 28px rgba(0,0,0,0.65),
               0 3px 10px rgba(0,0,0,0.45),
               0 0 0 1px rgba(100,140,200,0.12),
               0 1px 2px rgba(0,0,0,0.35);
   color: rgba(200, 220, 255, 0.92);
-  transition: background 2s ease, border-color 2s ease,
-              box-shadow 2s ease, color 2s ease,
-              transform 0.15s;
 }
 .ui-btn.night:hover {
   background: rgba(40, 60, 95, 0.95);
-  border-color: rgba(160, 190, 240, 0.45);
-  box-shadow: 0 12px 36px rgba(0,0,0,0.72),
+  box-shadow: inset 0 0 0 1px rgba(160, 190, 240, 0.45),
+              0 12px 36px rgba(0,0,0,0.72),
               0 4px 14px rgba(0,0,0,0.50),
               0 0 0 1px rgba(140,170,240,0.18),
               0 1px 3px rgba(0,0,0,0.40);
 }
-.ui-btn svg { width: 18px; height: 18px; pointer-events: none; }
+.ui-btn svg { width: 16px; height: 16px; pointer-events: none; }
 
-#btn-info     { bottom: 20px; left: 20px; }
-#btn-weather  { bottom: 20px; right: 68px;
-                transition: background 0.4s, border-color 0.4s; }
-#btn-tod      { bottom: 20px; right: 20px; }
-#btn-weather.rain {
-  background: rgba(28, 40, 32, 0.55);
-  border-color: rgba(140, 180, 130, 0.35);
-  color: rgba(180, 210, 170, 0.92);
+/* ── Bottom-right UI bar ───────────────────────────────────────────────── */
+#sw-group {
+  position: fixed;
+  bottom: 20px; left: 50%; transform: translateX(-50%);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.38);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.28);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.22),
+              0 2px 6px rgba(0,0,0,0.12);
+  transition: background 2s ease, border-color 2s ease, box-shadow 2s ease;
+  z-index: 100;
 }
-#btn-weather.rain:hover {
-  background: rgba(36, 52, 42, 0.72);
-  border-color: rgba(160, 200, 150, 0.45);
+#sw-group.night {
+  background: rgba(28, 42, 68, 0.72);
+  border-color: rgba(140, 170, 220, 0.28);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.55),
+              0 0 0 1px rgba(100,140,200,0.10),
+              0 2px 6px rgba(0,0,0,0.30);
 }
+#sw-group #btn-info {
+  position: static;
+  flex-shrink: 0;
+}
+.sw {
+  width: 72px; height: 36px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  /* inset shadow acts as border with zero box-model impact — content stays exactly 72×36 */
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.30),
+              0 8px 24px rgba(0,0,0,0.35),
+              0 3px 8px rgba(0,0,0,0.22),
+              0 1px 2px rgba(0,0,0,0.15);
+  color: rgba(0,0,0,0.75);
+  display: flex; align-items: center;
+  cursor: pointer; position: relative; user-select: none;
+  transition: background 2s ease, box-shadow 2s ease, color 2s ease;
+}
+.sw:hover {
+  background: rgba(255,255,255,0.70);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.30),
+              0 12px 32px rgba(0,0,0,0.40),
+              0 4px 10px rgba(0,0,0,0.25),
+              0 1px 3px rgba(0,0,0,0.18);
+}
+#sw-group.night .sw {
+  background: rgba(28, 42, 68, 0.90);
+  box-shadow: inset 0 0 0 1px rgba(140, 170, 220, 0.30),
+              0 8px 28px rgba(0,0,0,0.65),
+              0 3px 10px rgba(0,0,0,0.45),
+              0 0 0 1px rgba(100,140,200,0.12),
+              0 1px 2px rgba(0,0,0,0.35);
+  color: rgba(200, 220, 255, 0.92);
+}
+#sw-group.night .sw:hover {
+  background: rgba(40, 60, 95, 0.95);
+  box-shadow: inset 0 0 0 1px rgba(160, 190, 240, 0.45),
+              0 12px 36px rgba(0,0,0,0.72),
+              0 4px 14px rgba(0,0,0,0.50),
+              0 0 0 1px rgba(140,170,240,0.18),
+              0 1px 3px rgba(0,0,0,0.40);
+}
+.sw-track {
+  position: absolute; top: 3px; left: 3px;
+  width: 30px; height: 30px;
+  border-radius: 7px;
+  background: rgba(255,255,255,0.68);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.28), 0 0.5px 1px rgba(0,0,0,0.16);
+  transition: transform 0.22s cubic-bezier(0.34, 1.3, 0.64, 1),
+              background 2s ease, box-shadow 2s ease;
+  pointer-events: none;
+}
+#sw-group.night .sw-track {
+  background: rgba(200, 220, 255, 0.28);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.35), 0 0.5px 1px rgba(0,0,0,0.20);
+}
+.sw.on .sw-track { transform: translateX(36px); }
+.sw-icons { display: flex; width: 100%; align-items: center; position: relative; z-index: 1; }
+.sw-icon {
+  width: 36px; height: 30px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; transition: color 2s ease;
+}
+.sw .sw-icon-a { color: rgba(0,0,0,0.75); }
+.sw .sw-icon-b { color: rgba(0,0,0,0.25); }
+.sw.on .sw-icon-a { color: rgba(0,0,0,0.25); }
+.sw.on .sw-icon-b { color: rgba(0,0,0,0.75); }
+#sw-group.night .sw .sw-icon-a { color: rgba(200, 220, 255, 0.92); }
+#sw-group.night .sw .sw-icon-b { color: rgba(200, 220, 255, 0.30); }
+#sw-group.night .sw.on .sw-icon-a { color: rgba(200, 220, 255, 0.30); }
+#sw-group.night .sw.on .sw-icon-b { color: rgba(200, 220, 255, 0.92); }
 
 #info-card {
   position: fixed;
-  bottom: 70px; left: 20px;
+  bottom: calc(20px + 48px + 8px); left: 50%; right: auto; margin-left: -103px;
+  width: 206px;
   background: rgba(255,255,255,0.55);
   color: rgba(0,0,0,0.82);
-  border-radius: 12px;
+  border-radius: 10px;
   padding: 18px 18px 18px 16px;
-  max-width: 300px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 14px;
   line-height: 17px;
@@ -233,7 +327,7 @@ canvas {
   transition: background 2s ease, border-color 2s ease,
               box-shadow 2s ease, color 2s ease;
   display: none;
-  transform-origin: bottom left;
+  transform-origin: bottom center;
 }
 #info-card.night {
   background: rgba(28, 42, 68, 0.90);
@@ -243,9 +337,6 @@ canvas {
               0 6px 18px rgba(0,0,0,0.50),
               0 0 0 1px rgba(100,140,200,0.12),
               0 2px 4px rgba(0,0,0,0.35);
-}
-#info-card.night .info-divider {
-  border-top-color: rgba(140, 170, 220, 0.20);
 }
 #info-card.night a {
   color: rgba(180, 210, 255, 0.90);
@@ -259,7 +350,7 @@ canvas {
 #info-card.visible:not(.opening):not(.closing) {
   opacity: 1;
   transform: none;
-  border-radius: 12px;
+  border-radius: 10px;
 }
 #info-card.opening {
   animation: cardMorphIn 0.26s cubic-bezier(0.22, 1, 0.36, 1) forwards;
@@ -277,14 +368,14 @@ canvas {
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
-    border-radius: 12px;
+    border-radius: 10px;
   }
 }
 @keyframes cardMorphOut {
   from {
     opacity: 1;
     transform: scale(1) translateY(0);
-    border-radius: 12px;
+    border-radius: 10px;
   }
   to {
     opacity: 0;
@@ -295,13 +386,13 @@ canvas {
 #info-card p { margin: 0 0 10px; }
 #info-card p:last-child { margin: 0; }
 #info-card a { color: #111; }
+#info-card strong { font-style: italic; }
+
 .info-title {
   display: flex; align-items: center; gap: 8px;
   font-size: 16px; font-weight: 600; margin-bottom: 12px;
 }
 .info-title svg { width: 20px; height: 20px; flex-shrink: 0; }
-.info-divider { border: none; border-top: 1px solid #eee; margin: 12px 0; }
-
 #loading-overlay {
   position: fixed; inset: 0; z-index: 999;
   background: #0d1a09;
@@ -377,40 +468,54 @@ canvas {
   <img id="custom-cursor-sci" src="assets/Sci32.svg" width="32" height="32" alt="" hidden>
 </div>
 
-<!-- Info button -->
-<button class="ui-btn" id="btn-info" aria-label="Information">
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="12" cy="12" r="10"/>
-    <path d="M12 16v-4"/><path d="M12 8h.01"/>
-  </svg>
-</button>
-
-<!-- Weather toggle -->
-<button class="ui-btn" id="btn-weather" aria-label="Toggle rain">
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/>
-    <path d="M16 14v6"/><path d="M8 14v6"/><path d="M12 16v6"/>
-  </svg>
-</button>
-
-<!-- Day/Night toggle -->
-<button class="ui-btn" id="btn-tod" aria-label="Toggle day/night">
-  <svg id="icon-sun" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="12" cy="12" r="4"/>
-    <path d="M12 2v2"/><path d="M12 20v2"/>
-    <path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/>
-    <path d="M2 12h2"/><path d="M20 12h2"/>
-    <path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>
-  </svg>
-  <svg id="icon-moon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-    style="display:none">
-    <path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/>
-  </svg>
-</button>
+<!-- Bottom-right UI bar: TOD + weather + info -->
+<div id="sw-group">
+  <div class="sw" id="sw-tod" role="switch" aria-label="day / night">
+    <div class="sw-track"></div>
+    <div class="sw-icons">
+      <div class="sw-icon sw-icon-a">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v2"/><path d="M12 20v2"/>
+          <path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/>
+          <path d="M2 12h2"/><path d="M20 12h2"/>
+          <path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>
+        </svg>
+      </div>
+      <div class="sw-icon sw-icon-b">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+  <div class="sw" id="sw-weather" role="switch" aria-label="clear / rain">
+    <div class="sw-track"></div>
+    <div class="sw-icons">
+      <div class="sw-icon sw-icon-a">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2v2"/><path d="m4.93 4.93 1.41 1.41"/>
+          <path d="M20 12h2"/><path d="m19.07 4.93-1.41 1.41"/>
+          <path d="M15.947 12.65a4 4 0 0 0-5.925-4.128"/>
+          <path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z"/>
+        </svg>
+      </div>
+      <div class="sw-icon sw-icon-b">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25"/>
+          <line x1="8" y1="16" x2="8" y2="22"/><line x1="12" y1="14" x2="12" y2="20"/><line x1="16" y1="16" x2="16" y2="22"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+  <button class="ui-btn" id="btn-info" aria-label="Information">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M12 16v-4"/><path d="M12 8h.01"/>
+    </svg>
+  </button>
+</div>
 
 <!-- Info card -->
 <div id="info-card">
@@ -419,8 +524,9 @@ canvas {
   <p>Hover to touch grass<br>
      LMB click to cut grass</p>
   <p>Ambient sound by:<br>
-     <a href="https://pixabay.com/users/capaholiczsfx-52209270/?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=446356" target="_blank">Justyn Britton</a> &amp;<br>
-     <a href="https://pixabay.com/users/freesound_community-46691455/?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=17064" target="_blank">freesound_community</a></p>
+     <a href="https://pixabay.com/users/capaholiczsfx-52209270/?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=446356" target="_blank">Justyn Britton</a><br>
+     <a href="https://pixabay.com/users/freesound_community-46691455/?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=17064" target="_blank">freesound_community</a><br>
+     <a href="https://pixabay.com/users/boons_freak-39857343/?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=188158" target="_blank">Pig Bank - Mood</a></p>
 </div>
 
 <script type="module">
@@ -431,10 +537,23 @@ const fpsEl = document.getElementById('fps-dev');
 if (fpsEl) fpsEl.style.display = devMode ? 'block' : 'none';
 let fpsFrames = 0;
 let fpsIntervalStart = performance.now();
+let renderDiagFrames = 0;
+let perfMode = localStorage.getItem('perfMode') === 'true';
 
-let FIREFLY_PERMANENT = 280;
-let FIREFLY_TEMP      = 40;
+const FF_PERM_HQ  = 280;
+const FF_TEMP_HQ  = 40;
+const FF_PERM_PQ  = 80;
+const FF_TEMP_PQ  = 0;
+const FF_GLOW_HQ  = 12;
+const FF_GLOW_PQ  = 6;
+
+let FIREFLY_PERMANENT = FF_PERM_HQ;
+let FIREFLY_TEMP      = FF_TEMP_HQ;
 let FIREFLY_COUNT     = FIREFLY_PERMANENT + FIREFLY_TEMP;
+let fireflyLoopCount  = FIREFLY_COUNT;   // reduced in perf mode to skip inactive slots
+let ffPermMax         = FF_PERM_HQ;
+let ffTempMax         = FF_TEMP_HQ;
+let ffGlowSlotCount   = FF_GLOW_HQ;
 let FF_SIZE_BASE      = 100;
 let FF_BRI_MIN        = 2;
 let FF_BRI_RANGE      = 6;
@@ -443,23 +562,68 @@ let FF_GRASS_SCALE    = 0.35;
 let FF_REPEL_RADIUS   = 17;
 let FF_NIGHT_DELAY    = 2;
 
-const BLADE_NEAR      = 145000;
-const BLADE_FAR       = 100000;
-const BLADE_VERY_FAR  = 50000;
-const BLADE_COUNT     = BLADE_NEAR + BLADE_FAR;
+// High quality (default)
+const NEAR_COUNT_HQ  = 145000;
+const NEAR_SEGS_HQ   = 3;
+const FAR_COUNT_HQ   = 100000;
+const RAIN_COUNT_HQ  = 50000;
+
+// Performance mode — both tiers built at init; swap is scene add/remove only
+const NEAR_COUNT_PQ  = 90000;
+const NEAR_SEGS_PQ   = 2;
+const FAR_COUNT_PQ   = 65000;
+const RAIN_COUNT_PQ  = 20000;
+
+const VERY_FAR_COUNT_HQ = 50000;
+const VERY_FAR_COUNT_PQ = 25000;
+const BLADE_COUNT_HQ  = NEAR_COUNT_HQ + FAR_COUNT_HQ;
 
 let fieldMinX, fieldMaxX, fieldMinZ, fieldMaxZ;
 
 // ── Scene ─────────────────────────────────────────────────────────────────────
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.0));
 document.body.appendChild(renderer.domElement);
 
+function updateDPR() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  if (w === 0 || h === 0) return;
+  const dpr = perfMode ? 0.75 : Math.min(window.devicePixelRatio, 1.0);
+  renderer.setPixelRatio(dpr);
+  renderer.setSize(w, h);
+}
+
 // ── Mouse trail (ping-pong render target) ───────────────────────────────────
-const trailRTA = new THREE.WebGLRenderTarget(256, 256);
-const trailRTB = new THREE.WebGLRenderTarget(256, 256);
-let trailRead = trailRTA;
-let trailWrite = trailRTB;
+function createTrailRT(size) {
+  return new THREE.WebGLRenderTarget(size, size);
+}
+function createMowRT(size) {
+  return new THREE.WebGLRenderTarget(size, size, {
+    type:   THREE.HalfFloatType,
+    format: THREE.RGBAFormat,
+  });
+}
+
+const trailRTHQ = [createTrailRT(256), createTrailRT(256)];
+const trailRTPQ = [createTrailRT(128), createTrailRT(128)];
+const mowRTHQ   = [createMowRT(256), createMowRT(256)];
+const mowRTPQ   = [createMowRT(128), createMowRT(128)];
+
+let trailPair = trailRTHQ;
+let mowPair   = mowRTHQ;
+let mapTexSize = 256;
+
+let trailRead  = trailPair[0];
+let trailWrite = trailPair[1];
+let mowRead    = mowPair[0];
+let mowWrite   = mowPair[1];
+
+function bindTrailMowUniforms() {
+  trailMaterial.uniforms.uPrevTrail.value = trailRead.texture;
+  mowMaterial.uniforms.uPrevMow.value = mowRead.texture;
+  grassMaterial.uniforms.uTrail.value = trailRead.texture;
+  grassMaterial.uniforms.uMowMap.value = mowRead.texture;
+}
 
 const trailScene = new THREE.Scene();
 const trailCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
@@ -530,18 +694,6 @@ const trailMaterial = new THREE.ShaderMaterial({
 
 const trailQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), trailMaterial);
 trailScene.add(trailQuad);
-
-// ── Mow map (permanent cuts, no fade) ───────────────────────────────────────
-const mowRT  = new THREE.WebGLRenderTarget(256, 256, {
-  type:   THREE.HalfFloatType,
-  format: THREE.RGBAFormat,
-});
-const mowRTB = new THREE.WebGLRenderTarget(256, 256, {
-  type:   THREE.HalfFloatType,
-  format: THREE.RGBAFormat,
-});
-let mowRead  = mowRT;
-let mowWrite = mowRTB;
 
 const mowFragShader = /* glsl */`
 uniform sampler2D uPrevMow;
@@ -644,6 +796,8 @@ function applyMowAtPoint(worldX, worldZ, distWorld, clipsThisFrame) {
     clipsThisFrame++;
   }
   mowCellMark(worldX, worldZ);
+  mowHasActive = true;
+  lastMowTime  = mowElapsed;
   return clipsThisFrame;
 }
 
@@ -668,6 +822,9 @@ function renderMowPass(endU, endV, startU, startV, cutMode, decayOnly) {
 
 function updateMow(safeDelta) {
   mowElapsed += safeDelta;
+  const cutting = isMouseDown || isTouchMowing;
+  if (!mowHasActive && !cutting) return;
+
   mowMaterial.uniforms.uBrushSize.value = trailMaterial.uniforms.uBrushSize.value;
   mowMaterial.uniforms.uDecayDelta.value = safeDelta / 20.0;
   renderMowPass(
@@ -676,7 +833,6 @@ function updateMow(safeDelta) {
     false, true
   );
 
-  const cutting = isMouseDown || isTouchMowing;
   const onGrass =
     cursorTrailUV.x >= 0 && cursorTrailUV.x <= 1 &&
     cursorTrailUV.y >= 0 && cursorTrailUV.y <= 1;
@@ -710,12 +866,12 @@ function updateMow(safeDelta) {
         clipsThisFrame = applyMowAtPoint(fieldMinX + u0 * fieldW, fieldMinZ + v0 * fieldD, distWorld, clipsThisFrame);
       }
       clipsThisFrame = applyMowAtPoint(fieldMinX + u1 * fieldW, fieldMinZ + v1 * fieldD, distWorld, clipsThisFrame);
-      const bx = Math.floor((u1 - brushRadius) * 256) - pad;
-      const by = Math.floor((v1 - brushRadius) * 256) - pad;
-      const bw = Math.ceil(brushRadius * 2 * 256) + pad * 2;
-      const bh = Math.ceil(brushRadius * 2 * 256) + pad * 2;
+      const bx = Math.floor((u1 - brushRadius) * mapTexSize) - pad;
+      const by = Math.floor((v1 - brushRadius) * mapTexSize) - pad;
+      const bw = Math.ceil(brushRadius * 2 * mapTexSize) + pad * 2;
+      const bh = Math.ceil(brushRadius * 2 * mapTexSize) + pad * 2;
       renderer.setScissorTest(true);
-      renderer.setScissor(Math.max(0, bx), Math.max(0, by), Math.min(256, bw), Math.min(256, bh));
+      renderer.setScissor(Math.max(0, bx), Math.max(0, by), Math.min(mapTexSize, bw), Math.min(mapTexSize, bh));
       renderMowPass(
         startU + (endU - startU) * t1,
         startV + (endV - startV) * t1,
@@ -839,6 +995,9 @@ let cutDragGain = null;
 let rainAudioEl     = null;
 let rainAudioGain   = null;
 let rainGustGain    = null;
+let rainGustSource  = null;
+let rainGustBp      = null;
+let rainGustBuf     = null;
 let musicMasterGain = null;
 let thunderTimeout  = null;
 let thunderBuffer   = null;
@@ -855,7 +1014,18 @@ let prevCursorWorldZ = -50;
 let smoothDirX = 0;
 let smoothDirZ = 0;
 let smoothSpeed = 0;
-const trailPixelBuf = new Uint8Array(8 * 8 * 4);
+
+// Trail RT skip: track frames since cursor left field.
+// 0.996^750 ≈ 0.05 — trail is visually negligible after ~750 frames (~12.5 s at 60 fps).
+let trailOffFieldFrames = 0;
+const TRAIL_FADE_FRAMES = 750;
+let trailHasResidual = false;
+
+// Mow RT skip: track whether any cut cell is still regrowing.
+// MAX_REGROW_TIME slightly exceeds the 20 s regrowth constant.
+let mowHasActive = false;
+let lastMowTime  = -999;
+const MAX_REGROW_TIME = 22.0;
 
 function initAudio() {
   if (audioReady) return;
@@ -1052,23 +1222,15 @@ function initRainAudio() {
   rainAudioSrc.connect(rainAudioGain);
   rainAudioGain.connect(audioCtx.destination);
 
-  // Gust layer: white noise bandpass, swells with wind strength
+  // Gust layer: bandpass noise (gain always 0 — rain.mp3 is the bed; source stays stopped)
   const gustBufSize = Math.ceil(audioCtx.sampleRate * 0.5);
-  const gustBuf  = audioCtx.createBuffer(1, gustBufSize, audioCtx.sampleRate);
-  const gustData = gustBuf.getChannelData(0);
+  rainGustBuf = audioCtx.createBuffer(1, gustBufSize, audioCtx.sampleRate);
+  const gustData = rainGustBuf.getChannelData(0);
   for (let i = 0; i < gustBufSize; i++) gustData[i] = Math.random() * 2 - 1;
-  const gustSrc = audioCtx.createBufferSource();
-  gustSrc.buffer = gustBuf;
-  gustSrc.loop   = true;
-
-  const gustBp = audioCtx.createBiquadFilter();
-  gustBp.type = 'bandpass'; gustBp.frequency.value = 1800; gustBp.Q.value = 0.9;
 
   rainGustGain = audioCtx.createGain();
   rainGustGain.gain.value = 0.0;
-  gustSrc.connect(gustBp); gustBp.connect(rainGustGain);
   rainGustGain.connect(audioCtx.destination);
-  gustSrc.start();
 
   fetch('audio/thunder.mp3')
     .then(r => r.arrayBuffer())
@@ -1077,8 +1239,21 @@ function initRainAudio() {
     .catch(e => console.warn('Thunder audio failed to load:', e));
 }
 
+function stopRainGustDsp() {
+  if (rainGustSource) {
+    try { rainGustSource.stop(); } catch (_) { /* already stopped */ }
+    rainGustSource.disconnect();
+    rainGustSource = null;
+  }
+  if (rainGustBp) {
+    rainGustBp.disconnect();
+    rainGustBp = null;
+  }
+}
+
 function scheduleThunder() {
   if (!isRain || !audioCtx) return;
+  clearTimeout(thunderTimeout);
   const delay = 15000 + Math.random() * 35000;
   thunderTimeout = setTimeout(fireThunder, delay);
 }
@@ -1289,21 +1464,9 @@ function handleTouchEnd(e) {
 function updateAudioFromTrail() {
   if (!audioReady) return;
 
-  let trailIntensity = 0;
   const onGrass =
     cursorTrailUV.x >= 0 && cursorTrailUV.x <= 1 &&
     cursorTrailUV.y >= 0 && cursorTrailUV.y <= 1;
-
-  if (onGrass) {
-    const px = Math.floor(cursorTrailUV.x * 256);
-    const py = Math.floor(cursorTrailUV.y * 256);
-    const x = Math.max(0, Math.min(248, px - 4));
-    const y = Math.max(0, Math.min(248, py - 4));
-    renderer.readRenderTargetPixels(trailRead, x, y, 8, 8, trailPixelBuf);
-    let sum = 0;
-    for (let i = 0; i < trailPixelBuf.length; i += 4) sum += trailPixelBuf[i + 2] / 255;
-    trailIntensity = Math.min(1, sum / 64);
-  }
 
   const dx = mouseScreenX - lastMouseX;
   const dy = mouseScreenY - lastMouseY;
@@ -1313,7 +1476,10 @@ function updateAudioFromTrail() {
 
   smoothVelocity = smoothVelocity * 0.75 + velocity * 0.25;
 
-  const cursorActivity = Math.min(1, smoothVelocity * 0.04) * trailIntensity;
+  // Velocity-based rustle intensity — replaces GPU readRenderTargetPixels readback.
+  // smoothVelocity already correlates with trail accumulation (trail brush sized by speed).
+  const trailIntensity = onGrass ? Math.min(1, smoothVelocity * 0.04) : 0;
+  const cursorActivity = trailIntensity;
 
   const cursorDepth = Math.max(0, Math.min(1, cursorTrailUV.y));
   const distanceFade = 0.15 + 0.85 * cursorDepth;
@@ -1360,11 +1526,21 @@ function updateAudioFromTrail() {
 const customCursor = document.getElementById('custom-cursor');
 const customCursorHand = document.getElementById('custom-cursor-hand');
 const customCursorSci = document.getElementById('custom-cursor-sci');
-let cursorHoverDepth = 0;
+let uiChromeHoverDepth = 0;
 
 function updateCustomCursorPosition(clientX, clientY) {
   customCursor.style.left = `${clientX}px`;
   customCursor.style.top = `${clientY}px`;
+}
+
+function syncCustomCursorVisibility() {
+  if (uiChromeHoverDepth > 0) {
+    customCursor.style.opacity = '0';
+    return;
+  }
+  if (customCursor.style.display !== 'none') {
+    customCursor.style.opacity = '1';
+  }
 }
 
 function updateCustomCursorScale() {
@@ -1374,9 +1550,8 @@ function updateCustomCursorScale() {
   const depthScale = cursorOnGrass
     ? Math.max(0.38, 0.38 + 0.62 * cursorTrailUV.y)
     : 1.0;
-  const hoverMul = cursorHoverDepth > 0 ? 1.1 : 1.0;
   customCursor.style.transform =
-    `translate(-50%, -50%) scale(${depthScale * hoverMul})`;
+    `translate(-50%, -50%) scale(${depthScale})`;
   const cutting = isMouseDown || isTouchMowing;
   customCursorHand.hidden = cutting;
   customCursorSci.hidden = !cutting;
@@ -1389,12 +1564,18 @@ document.addEventListener('mouseleave', () => {
   customCursor.style.opacity = '0';
 });
 document.addEventListener('mouseenter', () => {
-  customCursor.style.opacity = '1';
+  syncCustomCursorVisibility();
 });
-document.querySelectorAll('.ui-btn, #info-card, #info-card a').forEach((el) => {
-  el.addEventListener('mouseenter', () => { cursorHoverDepth++; });
+document.querySelectorAll(
+  '#sw-group, .ui-btn, .sw, #info-card, #info-card a, #ff-dev-panel, #ff-dev-panel button, #ff-dev-panel .ff-dev-header'
+).forEach((el) => {
+  el.addEventListener('mouseenter', () => {
+    uiChromeHoverDepth++;
+    syncCustomCursorVisibility();
+  });
   el.addEventListener('mouseleave', () => {
-    cursorHoverDepth = Math.max(0, cursorHoverDepth - 1);
+    uiChromeHoverDepth = Math.max(0, uiChromeHoverDepth - 1);
+    syncCustomCursorVisibility();
   });
 });
 
@@ -1423,6 +1604,7 @@ renderer.domElement.addEventListener('touchend', handleTouchEnd, touchOpts);
 renderer.domElement.addEventListener('touchcancel', handleTouchEnd, touchOpts);
 
 function updateTrail() {
+  if (!trailHasResidual) return;
   trailMaterial.uniforms.uPrevTrail.value = trailRead.texture;
   renderer.setRenderTarget(trailWrite);
   renderer.render(trailScene, trailCamera);
@@ -1500,8 +1682,7 @@ function updateRendererSize() {
   if (w === 0 || h === 0) return;
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.0));
-  renderer.setSize(w, h);
+  updateDPR();
 }
 
 updateRendererSize();
@@ -1696,6 +1877,7 @@ uniform vec3 uHazeColor;
 uniform float uHazeDensity;
 uniform vec3  uRainFogColor;
 uniform float uRainFogStrength;
+uniform float uPerfMode;
 varying vec2 vUv;
 varying float vRandom;
 varying vec2 vWorldNormal;
@@ -1724,7 +1906,8 @@ void main() {
   bentCol = mix(bentCol, uBentTipLo, smoothstep(0.70, 0.85, vUv.y));
   bentCol = mix(bentCol, uBentTipHi, smoothstep(0.85, 1.00, vUv.y));
 
-  col = mix(col, bentCol, cursorBendAmt);
+  float bentBlend = cursorBendAmt * (1.0 - uPerfMode);
+  col = mix(col, bentCol, bentBlend);
 
   float ao = smoothstep(0.0, 0.25, vUv.y);
   col *= (uAOMin + (1.0 - uAOMin) * ao);
@@ -1735,15 +1918,17 @@ void main() {
 
   float specular = pow(max(0.0, vUv.y - 0.85) / 0.15, 2.0) * 0.4;
   specular *= 1.0 - cursorBendAmt * 0.9;
-  col += uSpecColor * specular;
+  col += uSpecColor * specular * (1.0 - uPerfMode);
 
   float depthT = clamp((vWorldPos.z - uFieldMinZ) / (uFieldMaxZ - uFieldMinZ), 0.0, 1.0);
-  float hazeNear = 0.55 - uHazeDensity * 0.30;
-  float hazeFar  = 0.45 - uHazeDensity * 0.10;
-  col = mix(uHazeColor, col, clamp(hazeNear + depthT * hazeFar, 0.0, 1.0));
+  float hazeMix = uPerfMode > 0.5
+    ? clamp(0.35 + depthT * 0.40, 0.0, 1.0)
+    : clamp((0.55 - uHazeDensity * 0.30) + depthT * (0.45 - uHazeDensity * 0.10), 0.0, 1.0);
+  col = mix(uHazeColor, col, hazeMix);
 
   // Rain fog: bleaches far field to grey-white veil (depthT=0 is far)
-  float rainFog = uRainFogStrength * pow(clamp(1.0 - depthT, 0.0, 1.0), 1.8);
+  float rainFog = uRainFogStrength * pow(clamp(1.0 - depthT, 0.0, 1.0), 1.8)
+                * (1.0 - uPerfMode);
   col = mix(col, uRainFogColor, rainFog);
 
   float cutAmt = clamp((vMow - 0.35) * (1.0 / 0.2), 0.0, 1.0);
@@ -1802,8 +1987,11 @@ const grassMaterial = new THREE.ShaderMaterial({
     uHazeDensity:     { value: 0.0 },
     uRainFogColor:    { value: new THREE.Vector3(0.72, 0.75, 0.68) },
     uRainFogStrength: { value: 0.0 },
+    uPerfMode:        { value: perfMode ? 1.0 : 0.0 },
   },
 });
+
+const grassNearMat = grassMaterial;
 
 computeFieldBounds();
 
@@ -1822,133 +2010,126 @@ grassMaterial.uniforms.uFieldInvW.value = 1.0 / (fieldMaxX - fieldMinX);
 grassMaterial.uniforms.uFieldInvD.value = 1.0 / (fieldMaxZ - fieldMinZ);
 grassMaterial.uniforms.uFieldMaxZ.value = fieldMaxZ;
 grassMaterial.uniforms.uSunDir.value.normalize();
-
-const bladeGeoNear = new THREE.PlaneGeometry(1, 1, 1, 3);
-bladeGeoNear.translate(0, 0.5, 0);
-const bladeGeoFar = new THREE.PlaneGeometry(1, 1, 1, 2);
-bladeGeoFar.translate(0, 0.5, 0);
-const bladeGeoVeryFar = new THREE.PlaneGeometry(1, 1, 1, 1);
-bladeGeoVeryFar.translate(0, 0.5, 0);
-
-const aHeightNear = new Float32Array(BLADE_NEAR);
-const aWidthNear  = new Float32Array(BLADE_NEAR);
-const aLeanNear   = new Float32Array(BLADE_NEAR);
-const aRandomNear = new Float32Array(BLADE_NEAR);
-const aHeightFar  = new Float32Array(BLADE_FAR);
-const aWidthFar   = new Float32Array(BLADE_FAR);
-const aLeanFar    = new Float32Array(BLADE_FAR);
-const aRandomFar  = new Float32Array(BLADE_FAR);
-const aHeightVeryFar = new Float32Array(BLADE_VERY_FAR);
-const aWidthVeryFar  = new Float32Array(BLADE_VERY_FAR);
-const aLeanVeryFar   = new Float32Array(BLADE_VERY_FAR);
-const aRandomVeryFar = new Float32Array(BLADE_VERY_FAR);
-
-bladeGeoNear.setAttribute('aHeight', new THREE.InstancedBufferAttribute(aHeightNear, 1));
-bladeGeoNear.setAttribute('aWidth',  new THREE.InstancedBufferAttribute(aWidthNear, 1));
-bladeGeoNear.setAttribute('aLean',   new THREE.InstancedBufferAttribute(aLeanNear, 1));
-bladeGeoNear.setAttribute('aRandom', new THREE.InstancedBufferAttribute(aRandomNear, 1));
-bladeGeoFar.setAttribute('aHeight', new THREE.InstancedBufferAttribute(aHeightFar, 1));
-bladeGeoFar.setAttribute('aWidth',  new THREE.InstancedBufferAttribute(aWidthFar, 1));
-bladeGeoFar.setAttribute('aLean',   new THREE.InstancedBufferAttribute(aLeanFar, 1));
-bladeGeoFar.setAttribute('aRandom', new THREE.InstancedBufferAttribute(aRandomFar, 1));
-bladeGeoVeryFar.setAttribute('aHeight', new THREE.InstancedBufferAttribute(aHeightVeryFar, 1));
-bladeGeoVeryFar.setAttribute('aWidth',  new THREE.InstancedBufferAttribute(aWidthVeryFar, 1));
-bladeGeoVeryFar.setAttribute('aLean',   new THREE.InstancedBufferAttribute(aLeanVeryFar, 1));
-bladeGeoVeryFar.setAttribute('aRandom', new THREE.InstancedBufferAttribute(aRandomVeryFar, 1));
+bindTrailMowUniforms();
 
 const grassMaterialFar = grassMaterial.clone();
 grassMaterialFar.side = THREE.FrontSide;
 grassMaterialFar.uniforms = grassMaterial.uniforms;
+const grassFarMat = grassMaterialFar;
 
 const grassMaterialVeryFar = grassMaterial.clone();
 grassMaterialVeryFar.side = THREE.FrontSide;
 grassMaterialVeryFar.uniforms = grassMaterial.uniforms;
+const grassVeryFarMat = grassMaterialVeryFar;
 
-const grassNear    = new THREE.InstancedMesh(bladeGeoNear,    grassMaterial, BLADE_NEAR);
-const grassFar     = new THREE.InstancedMesh(bladeGeoFar,     grassMaterialFar, BLADE_FAR);
-const grassVeryFar = new THREE.InstancedMesh(bladeGeoVeryFar, grassMaterialVeryFar, BLADE_VERY_FAR);
 const dummy = new THREE.Object3D();
+const _grassPlacementCols = Math.ceil(Math.sqrt(BLADE_COUNT_HQ * 2));
+const _grassSlotW = (fieldMaxX - fieldMinX) / _grassPlacementCols;
 
-const cols = Math.ceil(Math.sqrt(BLADE_COUNT * 2));
-const slotW = (fieldMaxX - fieldMinX) / cols;
-
-for (let n = 0; n < BLADE_NEAR; n++) {
-  const col = n % cols;
-  const x   = fieldMinX + (col + Math.random()) * slotW;
-  const zT  = 0.28 + Math.pow(Math.random(), 0.22) * 0.72;
-  const z   = fieldMinZ + zT * (fieldMaxZ - fieldMinZ);
-  const depthT  = (z - fieldMinZ) / (fieldMaxZ - fieldMinZ);
-  const height  = 0.4 + Math.random() * 0.8;
-  const lean    = -0.25 + Math.random() * 0.7;
-  const random  = Math.random();
-  const widthBase = 0.018 + Math.random() * 0.017;
-  const width   = widthBase * (0.8 + depthT * 0.3);
-  aHeightNear[n] = height;
-  aLeanNear[n]   = lean;
-  aRandomNear[n] = random;
-  aWidthNear[n]  = width;
-  dummy.position.set(x, 0, z);
-  dummy.rotation.set(0, 0, 0);
-  dummy.updateMatrix();
-  grassNear.setMatrixAt(n, dummy.matrix);
+function buildGrassGeometry(segments) {
+  const geo = new THREE.PlaneGeometry(1, 1, 1, segments);
+  geo.translate(0, 0.5, 0);
+  return geo;
 }
 
-for (let f = 0; f < BLADE_FAR; f++) {
-  const col = f % cols;
-  const x   = fieldMinX + (col + Math.random()) * slotW;
-  const zT  = Math.pow(Math.random(), 2.2) * 0.88;
-  const z   = fieldMinZ + zT * (fieldMaxZ - fieldMinZ);
-  const depthT  = (z - fieldMinZ) / (fieldMaxZ - fieldMinZ);
-  const height  = 0.4 + Math.random() * 0.8;
-  const lean    = -0.25 + Math.random() * 0.7;
-  const random  = Math.random();
-  const widthBase = 0.018 + Math.random() * 0.017;
-  const width   = widthBase * (0.8 + depthT * 0.3);
-  aHeightFar[f] = height;
-  aLeanFar[f]   = lean;
-  aRandomFar[f] = random;
-  aWidthFar[f]  = width;
-  dummy.position.set(x, 0, z);
-  dummy.rotation.set(0, 0, 0);
-  dummy.updateMatrix();
-  grassFar.setMatrixAt(f, dummy.matrix);
+function populateGrassInstances(mesh, count, tier) {
+  const geo = mesh.geometry;
+  const aHeight = new Float32Array(count);
+  const aWidth  = new Float32Array(count);
+  const aLean   = new Float32Array(count);
+  const aRandom = new Float32Array(count);
+  geo.setAttribute('aHeight', new THREE.InstancedBufferAttribute(aHeight, 1));
+  geo.setAttribute('aWidth',  new THREE.InstancedBufferAttribute(aWidth, 1));
+  geo.setAttribute('aLean',   new THREE.InstancedBufferAttribute(aLean, 1));
+  geo.setAttribute('aRandom', new THREE.InstancedBufferAttribute(aRandom, 1));
+
+  for (let n = 0; n < count; n++) {
+    const col = n % _grassPlacementCols;
+    const x   = fieldMinX + (col + Math.random()) * _grassSlotW;
+    const zT  = tier === 'near'
+      ? 0.28 + Math.pow(Math.random(), 0.22) * 0.72
+      : tier === 'far'
+      ? Math.pow(Math.random(), 2.2) * 0.88
+      : Math.pow(Math.random(), 3.5) * 0.60;
+    const z   = fieldMinZ + zT * (fieldMaxZ - fieldMinZ);
+    const depthT  = (z - fieldMinZ) / (fieldMaxZ - fieldMinZ);
+    const height  = 0.4 + Math.random() * 0.8;
+    const lean    = -0.25 + Math.random() * 0.7;
+    const random  = Math.random();
+    const widthBase = 0.018 + Math.random() * 0.017;
+    const width   = widthBase * (0.8 + depthT * 0.3);
+    aHeight[n] = height;
+    aLean[n]   = lean;
+    aRandom[n] = random;
+    aWidth[n]  = width;
+    dummy.position.set(x, 0, z);
+    dummy.rotation.set(0, 0, 0);
+    dummy.updateMatrix();
+    mesh.setMatrixAt(n, dummy.matrix);
+  }
+  mesh.instanceMatrix.needsUpdate = true;
 }
 
-console.log(
-  'grassFar Z: zT = Math.pow(Math.random(), 2.2) * 0.88 — range [0, 0.88], biased toward fieldMinZ (far)'
-);
-
-for (let v = 0; v < BLADE_VERY_FAR; v++) {
-  const col = v % cols;
-  const x   = fieldMinX + (col + Math.random()) * slotW;
-  const zT  = Math.pow(Math.random(), 3.5) * 0.60;
-  const z   = fieldMinZ + zT * (fieldMaxZ - fieldMinZ);
-  const depthT  = (z - fieldMinZ) / (fieldMaxZ - fieldMinZ);
-  const height  = 0.4 + Math.random() * 0.8;
-  const lean    = -0.25 + Math.random() * 0.7;
-  const random  = Math.random();
-  const widthBase = 0.018 + Math.random() * 0.017;
-  const width   = widthBase * (0.8 + depthT * 0.3);
-  aHeightVeryFar[v] = height;
-  aLeanVeryFar[v]   = lean;
-  aRandomVeryFar[v] = random;
-  aWidthVeryFar[v]  = width;
-  dummy.position.set(x, 0, z);
-  dummy.rotation.set(0, 0, 0);
-  dummy.updateMatrix();
-  grassVeryFar.setMatrixAt(v, dummy.matrix);
+function buildGrassNearMesh(count, segments) {
+  const mesh = new THREE.InstancedMesh(buildGrassGeometry(segments), grassNearMat, count);
+  mesh.frustumCulled = false;
+  populateGrassInstances(mesh, count, 'near');
+  return mesh;
 }
 
-console.log(
-  'grassVeryFar: 90k blades, 1 segment, zT = pow(random, 3.5) * 0.60'
-);
+function buildGrassFarMesh(count) {
+  const mesh = new THREE.InstancedMesh(buildGrassGeometry(2), grassFarMat, count);
+  mesh.frustumCulled = false;
+  populateGrassInstances(mesh, count, 'far');
+  return mesh;
+}
 
-grassNear.instanceMatrix.needsUpdate = true;
-grassFar.instanceMatrix.needsUpdate  = true;
-grassVeryFar.instanceMatrix.needsUpdate = true;
-grassNear.frustumCulled = false;
-grassFar.frustumCulled  = false;
-grassVeryFar.frustumCulled = false;
+function buildGrassVeryFarMesh(count) {
+  const mesh = new THREE.InstancedMesh(buildGrassGeometry(1), grassMaterialVeryFar, count);
+  mesh.frustumCulled = false;
+  populateGrassInstances(mesh, count, 'veryFar');
+  return mesh;
+}
+
+// HQ + PQ tiers live in GPU memory together (~60MB PQ grass extra) — instant scene swap
+const grassNearHQ    = buildGrassNearMesh(NEAR_COUNT_HQ, NEAR_SEGS_HQ);
+const grassNearPQ    = buildGrassNearMesh(NEAR_COUNT_PQ, NEAR_SEGS_PQ);
+const grassFarHQ     = buildGrassFarMesh(FAR_COUNT_HQ);
+const grassFarPQ     = buildGrassFarMesh(FAR_COUNT_PQ);
+const grassVeryFarHQ = buildGrassVeryFarMesh(VERY_FAR_COUNT_HQ);
+const grassVeryFarPQ = buildGrassVeryFarMesh(VERY_FAR_COUNT_PQ);
+
+// Set correct bounding spheres so Three.js frustum culling is accurate.
+// The base PlaneGeometry bounding sphere is too small (covers only the unit quad).
+// We replace it with one that tightly wraps the full field extent + tallest blade.
+(function setGrassBoundingSpheres() {
+  const cx    = (fieldMinX + fieldMaxX) * 0.5;
+  const cz    = (fieldMinZ + fieldMaxZ) * 0.5;
+  const rx    = (fieldMaxX - fieldMinX) * 0.5;
+  const rz    = (fieldMaxZ - fieldMinZ) * 0.5;
+  const maxH  = 1.2;  // tallest blade
+  const sphere = new THREE.Sphere(
+    new THREE.Vector3(cx, maxH * 0.5, cz),
+    Math.sqrt(rx * rx + rz * rz + maxH * maxH)
+  );
+  const meshes = [
+    grassNearHQ, grassNearPQ,
+    grassFarHQ,  grassFarPQ,
+    grassVeryFarHQ, grassVeryFarPQ,
+  ];
+  for (const m of meshes) {
+    m.geometry.boundingSphere = sphere.clone();
+    m.frustumCulled = true;
+  }
+})();
+
+let grassNear    = grassNearHQ;
+let grassFar     = grassFarHQ;
+let grassVeryFar = grassVeryFarHQ;
+
+scene.add(grassNearHQ);
+scene.add(grassFarHQ);
+scene.add(grassVeryFarHQ);
 
 const groundVertShader = /* glsl */`
 varying float vWorldZ;
@@ -2169,14 +2350,14 @@ function crossfadeToDay() {
 }
 
 function updateBtnTOD() {
-  document.getElementById('btn-tod').classList.toggle('night', isNight);
+  document.getElementById('sw-tod').classList.toggle('on', isNight);
+  document.getElementById('sw-group').classList.toggle('night', isNight);
   document.getElementById('btn-info').classList.toggle('night', isNight);
-  document.getElementById('info-card')
-    .classList.toggle('night', isNight);
+  document.getElementById('info-card').classList.toggle('night', isNight);
 }
 
 function updateBtnWeather() {
-  document.getElementById('btn-weather').classList.toggle('rain', isRain);
+  document.getElementById('sw-weather').classList.toggle('on', isRain);
 }
 
 const _wSunny = new THREE.Color();
@@ -2264,6 +2445,8 @@ function applyWeather() {
   _wVecSunny.set(_wSunny.r, _wSunny.g, _wSunny.b);
   rainMat.uniforms.uRainColor.value.lerpVectors(_wVecSunny, _wVecRain, r);
   rainMat.uniforms.uRainT.value = r;
+  if (r > 0) setRainInScene(true);
+  else setRainInScene(false);
 
   // Raindrop rebound color: day-rain = light grey-white, night-rain = dim blue-silver
   _wVecSunny.set(0.82, 0.88, 0.82); // day rain
@@ -2295,6 +2478,7 @@ function toggleWeather() {
   } else {
     clearTimeout(thunderTimeout);
     thunderTimeout = null;
+    stopRainGustDsp();
   }
 }
 
@@ -2355,50 +2539,9 @@ function applyTOD() {
   applyWeather();
 }
 
-scene.add(grassNear);
-scene.add(grassFar);
-scene.add(grassVeryFar);
-
 // ── Rain streaks ─────────────────────────────────────────────────────────────
-const RAIN_COUNT = 50000;
-const hw = 0.010;
-const hh = 0.42;
-
-const rainGeo = new THREE.BufferGeometry();
-rainGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
-  -hw, -hh, 0,   hw, -hh, 0,   hw,  hh, 0,
-  -hw, -hh, 0,   hw,  hh, 0,  -hw,  hh, 0,
-]), 3));
-
-const rainPosArr   = new Float32Array(RAIN_COUNT * 3);
-const rainSpeedArr = new Float32Array(RAIN_COUNT);
-const rainAlphaArr = new Float32Array(RAIN_COUNT);
-const rainLenArr   = new Float32Array(RAIN_COUNT);
-
-const rainPosBuf = new THREE.InstancedBufferAttribute(rainPosArr, 3)
-  .setUsage(THREE.DynamicDrawUsage);
-const rainSpeedBuf = new THREE.InstancedBufferAttribute(rainSpeedArr, 1)
-  .setUsage(THREE.DynamicDrawUsage);
-const rainAlphaBuf = new THREE.InstancedBufferAttribute(rainAlphaArr, 1)
-  .setUsage(THREE.DynamicDrawUsage);
-const rainLenBuf = new THREE.InstancedBufferAttribute(rainLenArr, 1)
-  .setUsage(THREE.DynamicDrawUsage);
-
-rainGeo.setAttribute('aRainPos', rainPosBuf);
-rainGeo.setAttribute('aRainSpeed', rainSpeedBuf);
-rainGeo.setAttribute('aRainAlpha', rainAlphaBuf);
-rainGeo.setAttribute('aRainLen', rainLenBuf);
-
-function initRainInstance(i) {
-  rainPosArr[i * 3]     = fieldMinX + Math.random() * (fieldMaxX - fieldMinX);
-  rainPosArr[i * 3 + 1] = -2.0 + Math.random() * 34.0;
-  rainPosArr[i * 3 + 2] = fieldMinZ + Math.random() * (fieldMaxZ - fieldMinZ);
-  rainSpeedArr[i] = 0.80 + Math.random() * 0.40;
-  rainAlphaArr[i] = 0.28 + Math.random() * 0.32;
-  rainLenArr[i]   = 0.4 + Math.pow(Math.random(), 2.0) * 1.2;
-}
-
-for (let i = 0; i < RAIN_COUNT; i++) initRainInstance(i);
+const RAIN_HW = 0.010;
+const RAIN_HH = 0.42;
 
 const rainVertSrc = /* glsl */`
 uniform float uRainT;
@@ -2497,35 +2640,158 @@ const rainMat = new THREE.ShaderMaterial({
   },
 });
 
-const rainMesh = new THREE.InstancedMesh(rainGeo, rainMat, RAIN_COUNT);
-rainMesh.frustumCulled = false;
-rainMesh.renderOrder = 10;
-scene.add(rainMesh);
+function createRainQuadGeometry() {
+  const rainGeo = new THREE.BufferGeometry();
+  rainGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+    -RAIN_HW, -RAIN_HH, 0,   RAIN_HW, -RAIN_HH, 0,   RAIN_HW,  RAIN_HH, 0,
+    -RAIN_HW, -RAIN_HH, 0,   RAIN_HW,  RAIN_HH, 0,  -RAIN_HW,  RAIN_HH, 0,
+  ]), 3));
+  return rainGeo;
+}
+
+function initRainInstance(i, pool) {
+  const z = fieldMinZ + Math.random() * (fieldMaxZ - fieldMinZ);
+  pool.posArr[i * 3]     = fieldMinX + Math.random() * (fieldMaxX - fieldMinX);
+  pool.posArr[i * 3 + 1] = -2.0 + Math.random() * 34.0;
+  pool.posArr[i * 3 + 2] = z;
+  const depthT = Math.min(1, Math.max(0, (z - fieldMinZ) / (fieldMaxZ - fieldMinZ)));
+  pool.speedArr[i] = (0.80 + Math.random() * 0.40) * (0.6 + depthT * 0.9);
+  pool.alphaArr[i] = 0.28 + Math.random() * 0.32;
+  pool.lenArr[i]   = 0.4 + Math.pow(Math.random(), 2.0) * 1.2;
+}
+
+function buildRainPool(count) {
+  const rainGeo = createRainQuadGeometry();
+  const posArr   = new Float32Array(count * 3);
+  const speedArr = new Float32Array(count);
+  const alphaArr = new Float32Array(count);
+  const lenArr   = new Float32Array(count);
+  const posBuf = new THREE.InstancedBufferAttribute(posArr, 3)
+    .setUsage(THREE.DynamicDrawUsage);
+  const speedBuf = new THREE.InstancedBufferAttribute(speedArr, 1)
+    .setUsage(THREE.StaticDrawUsage);
+  const alphaBuf = new THREE.InstancedBufferAttribute(alphaArr, 1)
+    .setUsage(THREE.StaticDrawUsage);
+  const lenBuf = new THREE.InstancedBufferAttribute(lenArr, 1)
+    .setUsage(THREE.StaticDrawUsage);
+  rainGeo.setAttribute('aRainPos', posBuf);
+  rainGeo.setAttribute('aRainSpeed', speedBuf);
+  rainGeo.setAttribute('aRainAlpha', alphaBuf);
+  rainGeo.setAttribute('aRainLen', lenBuf);
+  const mesh = new THREE.InstancedMesh(rainGeo, rainMat, count);
+  mesh.frustumCulled = false;
+  mesh.renderOrder = 10;
+  mesh.visible = false;
+  const pool = { mesh, posArr, speedArr, alphaArr, lenArr, posBuf, count };
+  for (let i = 0; i < count; i++) initRainInstance(i, pool);
+  return pool;
+}
+
+const rainPoolHQ = buildRainPool(RAIN_COUNT_HQ);
+const rainPoolPQ = buildRainPool(RAIN_COUNT_PQ);
+let activeRainPool = rainPoolHQ;
+
+function setRainInScene(inScene) {
+  const m = activeRainPool.mesh;
+  if (inScene) {
+    if (!m.parent) scene.add(m);
+    m.visible = true;
+  } else {
+    m.visible = false;
+    if (m.parent) scene.remove(m);
+  }
+}
+
+function applyPerfModeState() {
+  grassNearMat.side = perfMode ? THREE.FrontSide : THREE.DoubleSide;
+  grassNearMat.needsUpdate = true;
+
+  const pf = perfMode ? 1.0 : 0.0;
+  grassMaterial.uniforms.uPerfMode.value = pf;
+
+  trailPair = perfMode ? trailRTPQ : trailRTHQ;
+  mowPair   = perfMode ? mowRTPQ   : mowRTHQ;
+  mapTexSize = perfMode ? 128 : 256;
+  trailRead  = trailPair[0];
+  trailWrite = trailPair[1];
+  mowRead    = mowPair[0];
+  mowWrite   = mowPair[1];
+  bindTrailMowUniforms();
+
+  ffPermMax = perfMode ? FF_PERM_PQ : FF_PERM_HQ;
+  ffTempMax = perfMode ? FF_TEMP_PQ : FF_TEMP_HQ;
+  ffGlowSlotCount = perfMode ? FF_GLOW_PQ : FF_GLOW_HQ;
+  // Reduce firefly sim loop ceiling so inactive slots aren't iterated.
+  // Small headroom (10) above the active cap handles temp fireflies.
+  fireflyLoopCount = perfMode ? (FF_PERM_PQ + FF_TEMP_PQ + 10) : FIREFLY_COUNT;
+  if (perfMode) {
+    for (let i = ffPermMax; i < FIREFLY_PERMANENT; i++) {
+      ff[i].brightness = 0;
+      ff[i].ffInSet = false;
+      if (ffPositions) {
+        ffPositions[i * 3]     = -9999;
+        ffPositions[i * 3 + 1] = -9999;
+        ffPositions[i * 3 + 2] = -9999;
+        ffBrightness[i]        = 0;
+      }
+    }
+    if (ffGeo) ffGeo.attributes.position.needsUpdate = true;
+    resetFireflyGrassSlots();
+  }
+
+  if (perfMode) {
+    for (let i = CLIP_COUNT_PQ; i < CLIP_COUNT_HQ; i++) deactivateClip(i);
+  }
+  clipPoolMax = perfMode ? CLIP_COUNT_PQ : CLIP_COUNT_HQ;
+  clipMesh.count = clipPoolMax;
+
+  updateDPR();
+
+  scene.remove(grassNearHQ);
+  scene.remove(grassNearPQ);
+  scene.remove(grassFarHQ);
+  scene.remove(grassFarPQ);
+  scene.remove(grassVeryFarHQ);
+  scene.remove(grassVeryFarPQ);
+  grassNear    = perfMode ? grassNearPQ    : grassNearHQ;
+  grassFar     = perfMode ? grassFarPQ     : grassFarHQ;
+  grassVeryFar = perfMode ? grassVeryFarPQ : grassVeryFarHQ;
+  scene.add(grassNear);
+  scene.add(grassFar);
+  scene.add(grassVeryFar);
+
+  if (rainPoolHQ.mesh.parent) scene.remove(rainPoolHQ.mesh);
+  if (rainPoolPQ.mesh.parent) scene.remove(rainPoolPQ.mesh);
+  activeRainPool = perfMode ? rainPoolPQ : rainPoolHQ;
+  if (rainT > 0) setRainInScene(true);
+}
 
 function updateRain(delta) {
   if (rainT === 0.0) return;
 
-  const fallSpeed = 16.0;
-
-  rainMat.uniforms.uRainT.value = rainT;
-
-  const dy = fallSpeed * delta;
+  const pool = activeRainPool;
+  const { posArr, speedArr, posBuf, count } = pool;
+  const dy = 16.0 * delta;
   const fieldW = fieldMaxX - fieldMinX;
   const fieldD = fieldMaxZ - fieldMinZ;
+  const invFieldD = 1.0 / fieldD;
 
-  for (let i = 0; i < RAIN_COUNT; i++) {
-    const depthT = Math.min(1, Math.max(0, (rainPosArr[i * 3 + 2] - fieldMinZ) / fieldD));
-    const speed = dy * rainSpeedArr[i] * (0.6 + depthT * 0.9);
-    rainPosArr[i * 3 + 1] -= speed;
+  for (let i = 0; i < count; i++) {
+    const base = i * 3;
+    posArr[base + 1] -= dy * speedArr[i];
 
-    if (rainPosArr[i * 3 + 1] < -1.0) {
-      rainPosArr[i * 3]     = fieldMinX + Math.random() * fieldW;
-      rainPosArr[i * 3 + 1] = 28.0 + Math.random() * 6.0;
-      rainPosArr[i * 3 + 2] = fieldMinZ + Math.random() * fieldD;
+    if (posArr[base + 1] < -1.0) {
+      const oldDepthT = Math.min(1, Math.max(0, (posArr[base + 2] - fieldMinZ) * invFieldD));
+      const newZ = fieldMinZ + Math.random() * fieldD;
+      const newDepthT = Math.min(1, Math.max(0, (newZ - fieldMinZ) * invFieldD));
+      posArr[base]     = fieldMinX + Math.random() * fieldW;
+      posArr[base + 1] = 28.0 + Math.random() * 6.0;
+      posArr[base + 2] = newZ;
+      speedArr[i] *= (0.6 + newDepthT * 0.9) / (0.6 + oldDepthT * 0.9);
     }
   }
 
-  rainPosBuf.needsUpdate = true;
+  posBuf.needsUpdate = true;
 
   // Rebound splashes — tiny drops popping off the canopy surface
   const spawnCount = Math.floor(rainT * (20 + Math.random() * 20));
@@ -2546,11 +2812,10 @@ let ffGeo;
 let ff = [];
 let fireflies;
 
-const FF_LIGHT_SLOTS   = 12;
 const FF_SET_ENTER     = 0.15;
 const FF_SET_LEAVE     = 0.05;
 const FF_SLOT_FADE_DUR = 0.3;
-const ffSlots = Array.from({ length: FF_LIGHT_SLOTS }, () => ({
+const ffSlots = Array.from({ length: FF_GLOW_HQ }, () => ({
   fireflyIndex: null,
   bri: 0,
 }));
@@ -2558,7 +2823,7 @@ const _ffOccupiedSet = new Set();
 const _ffCandidates = [];
 
 function resetFireflyGrassSlots() {
-  for (let s = 0; s < FF_LIGHT_SLOTS; s++) {
+  for (let s = 0; s < FF_GLOW_HQ; s++) {
     ffSlots[s].fireflyIndex = null;
     ffSlots[s].bri = 0;
   }
@@ -2567,7 +2832,7 @@ function resetFireflyGrassSlots() {
 function updateFireflyGlowInstances(delta) {
   if (fireflyFadeT === 0.0 && !isNight) return;
 
-  for (let i = 0; i < FIREFLY_COUNT; i++) {
+  for (let i = 0; i < ffPermMax; i++) {
     const b = ff[i].brightness;
     if (!ff[i].ffInSet && b > FF_SET_ENTER) ff[i].ffInSet = true;
     else if (ff[i].ffInSet && b < FF_SET_LEAVE) ff[i].ffInSet = false;
@@ -2576,7 +2841,7 @@ function updateFireflyGlowInstances(delta) {
   const fadeK = Math.min(1, delta / FF_SLOT_FADE_DUR);
   const trackK = Math.min(1, delta / 0.05);
 
-  for (let s = 0; s < FF_LIGHT_SLOTS; s++) {
+  for (let s = 0; s < ffGlowSlotCount; s++) {
     const slot = ffSlots[s];
     if (slot.fireflyIndex === null) continue;
 
@@ -2592,12 +2857,12 @@ function updateFireflyGlowInstances(delta) {
   }
 
   _ffOccupiedSet.clear();
-  for (let s = 0; s < FF_LIGHT_SLOTS; s++) {
+  for (let s = 0; s < ffGlowSlotCount; s++) {
     if (ffSlots[s].fireflyIndex !== null) _ffOccupiedSet.add(ffSlots[s].fireflyIndex);
   }
 
   _ffCandidates.length = 0;
-  for (let i = 0; i < FIREFLY_COUNT; i++) {
+  for (let i = 0; i < ffPermMax; i++) {
     if (ff[i].ffInSet && !_ffOccupiedSet.has(i)) _ffCandidates.push(i);
   }
   _ffCandidates.sort((a, b) => {
@@ -2607,16 +2872,16 @@ function updateFireflyGlowInstances(delta) {
   });
 
   let ci = 0;
-  for (let s = 0; s < FF_LIGHT_SLOTS && ci < _ffCandidates.length; s++) {
+  for (let s = 0; s < ffGlowSlotCount && ci < _ffCandidates.length; s++) {
     if (ffSlots[s].fireflyIndex === null) {
       ffSlots[s].fireflyIndex = _ffCandidates[ci++];
       ffSlots[s].bri = 0;
     }
   }
 
-  for (let s = 0; s < FF_LIGHT_SLOTS; s++) {
+  for (let s = 0; s < FF_GLOW_HQ; s++) {
     const slot = ffSlots[s];
-    if (slot.fireflyIndex === null || slot.bri < 0.01) {
+    if (s >= ffGlowSlotCount || slot.fireflyIndex === null || slot.bri < 0.01) {
       _glowDummy.position.set(-9999, 0, 0);
       _glowDummy.scale.setScalar(1);
     } else {
@@ -2673,7 +2938,7 @@ const fireflyGlowMat = new THREE.ShaderMaterial({
 });
 
 const _glowDummy = new THREE.Object3D();
-const fireflyGlowMesh = new THREE.InstancedMesh(fireflyGlowGeo, fireflyGlowMat, FF_LIGHT_SLOTS);
+const fireflyGlowMesh = new THREE.InstancedMesh(fireflyGlowGeo, fireflyGlowMat, FF_GLOW_HQ);
 fireflyGlowMesh.frustumCulled = false;
 scene.add(fireflyGlowMesh);
 
@@ -3007,13 +3272,15 @@ const clipMat = new THREE.ShaderMaterial({
   depthWrite: false,
 });
 
-const CLIP_COUNT = 1200;
+const CLIP_COUNT_HQ = 1200;
+const CLIP_COUNT_PQ = 400;
+let clipPoolMax = CLIP_COUNT_HQ;
 
-const clipHeightArr = new Float32Array(CLIP_COUNT);
-const clipWidthArr  = new Float32Array(CLIP_COUNT);
-const clipLeanArr   = new Float32Array(CLIP_COUNT);
-const clipAlphaArr  = new Float32Array(CLIP_COUNT);
-const clipIsRainArr = new Float32Array(CLIP_COUNT);
+const clipHeightArr = new Float32Array(CLIP_COUNT_HQ);
+const clipWidthArr  = new Float32Array(CLIP_COUNT_HQ);
+const clipLeanArr   = new Float32Array(CLIP_COUNT_HQ);
+const clipAlphaArr  = new Float32Array(CLIP_COUNT_HQ);
+const clipIsRainArr = new Float32Array(CLIP_COUNT_HQ);
 
 clipBladeGeo.setAttribute('aClipHeight',
   new THREE.InstancedBufferAttribute(clipHeightArr, 1).setUsage(THREE.DynamicDrawUsage));
@@ -3026,14 +3293,14 @@ clipBladeGeo.setAttribute('aClipAlpha',
 clipBladeGeo.setAttribute('aClipIsRain',
   new THREE.InstancedBufferAttribute(clipIsRainArr, 1).setUsage(THREE.DynamicDrawUsage));
 
-const clipMesh = new THREE.InstancedMesh(clipBladeGeo, clipMat, CLIP_COUNT);
+const clipMesh = new THREE.InstancedMesh(clipBladeGeo, clipMat, CLIP_COUNT_HQ);
 clipMesh.frustumCulled = false;
 clipMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 scene.add(clipMesh);
 
 const _cd = new THREE.Object3D();
 
-const clips = Array.from({ length: CLIP_COUNT }, () => ({
+const clips = Array.from({ length: CLIP_COUNT_HQ }, () => ({
   active: false,
   x: 0, y: 0, z: 0,
   velX: 0, velY: 0, velZ: 0,
@@ -3046,13 +3313,22 @@ const clips = Array.from({ length: CLIP_COUNT }, () => ({
 let clipIdx = 0;
 const activeClips = [];
 
+function deactivateClip(i) {
+  const c = clips[i];
+  if (!c.active) return;
+  c.active = false;
+  clipAlphaArr[i] = 0;
+  const ai = activeClips.indexOf(i);
+  if (ai >= 0) activeClips.splice(ai, 1);
+}
+
 function spawnClips(wx, wz, fraction) {
   const brushRadius = trailMaterial.uniforms.uBrushSize.value
                     * (fieldMaxX - fieldMinX);
   const count = Math.max(5, Math.round((18 + Math.floor(Math.random() * 12)) * (fraction || 1.0)));
 
   for (let i = 0; i < count; i++) {
-    const idx = clipIdx % CLIP_COUNT;
+    const idx = clipIdx % clipPoolMax;
     const c = clips[idx];
     const wasActive = c.active;
     clipIdx++;
@@ -3086,7 +3362,7 @@ function spawnClips(wx, wz, fraction) {
 }
 
 function spawnRainDrop(rx, rz, vx, vy, vz) {
-  const idx = clipIdx % CLIP_COUNT;
+  const idx = clipIdx % clipPoolMax;
   const c   = clips[idx];
   const wasActive = c.active;
   clipIdx++;
@@ -3111,6 +3387,8 @@ function spawnRainDrop(rx, rz, vx, vy, vz) {
   c.lean    = 0;
 }
 
+if (perfMode) applyPerfModeState();
+
 // ── Resize ──────────────────────────────────────────────────────────────────
 function onResize() {
   updateRendererSize();
@@ -3119,6 +3397,25 @@ window.addEventListener('resize', onResize);
 
 const infoCard = document.getElementById('info-card');
 const btnInfo = document.getElementById('btn-info');
+
+function logPerfDiagnostics(label) {
+  if (!devMode) return;
+  const inScene = (m) => m.parent === scene;
+  const tier = (m) => (m === grassNearPQ || m === grassFarPQ || m === grassVeryFarPQ) ? 'PQ' : 'HQ';
+  console.log(`--- perf diag: ${label} ---`);
+  console.log('perfMode:', perfMode);
+  console.log('grassNear count:', grassNear.count, tier(grassNear), 'inScene:', inScene(grassNear));
+  console.log('grassFar count:', grassFar.count, tier(grassFar), 'inScene:', inScene(grassFar));
+  console.log('grassVeryFar count:', grassVeryFar.count, tier(grassVeryFar), 'inScene:', inScene(grassVeryFar));
+  console.log('both near tiers in scene:', inScene(grassNearHQ) && inScene(grassNearPQ));
+  console.log('scene children:', scene.children.length);
+  console.log('DPR:', renderer.getPixelRatio(),
+    'canvas:', renderer.domElement.width, 'x', renderer.domElement.height,
+    'window:', window.innerWidth, 'x', window.innerHeight);
+  console.log('mapTexSize:', mapTexSize, 'clipPoolMax:', clipPoolMax,
+    'ffSim:', ffPermMax + ffTempMax, 'ffGlow:', ffGlowSlotCount);
+  console.log('shadowMap:', renderer.shadowMap.enabled);
+}
 
 function infoCardOpen() {
   return infoCard.classList.contains('visible') ||
@@ -3161,13 +3458,11 @@ document.addEventListener('click', (e) => {
   }
 });
 
-document.getElementById('btn-weather').addEventListener('click', toggleWeather);
+document.getElementById('sw-weather').addEventListener('click', toggleWeather);
 
-document.getElementById('btn-tod').addEventListener('click', () => {
+document.getElementById('sw-tod').addEventListener('click', () => {
   isNight = !isNight;
-  applyTOD();
-  document.getElementById('icon-sun').style.display  = isNight ? 'none'  : '';
-  document.getElementById('icon-moon').style.display = isNight ? ''      : 'none';
+  applyTOD(); // calls updateBtnTOD() which syncs .on class
 });
 
 updateBtnTOD();
@@ -3198,7 +3493,8 @@ function updateFireflies(delta, elapsed, gustStrength, gustDirX, gustDirZ,
 
   const spawnThreshold = 4.0;
   if (cursorOnGrass && cursorSpeed > spawnThreshold && Math.random() < cursorSpeed * 0.012) {
-    for (let s = FIREFLY_PERMANENT; s < FIREFLY_COUNT; s++) {
+    const tempEnd = FIREFLY_PERMANENT + ffTempMax;
+    for (let s = FIREFLY_PERMANENT; s < tempEnd; s++) {
       if (!ff[s].active) {
         const f = ff[s];
         f.active    = true;
@@ -3221,8 +3517,17 @@ function updateFireflies(delta, elapsed, gustStrength, gustDirX, gustDirZ,
     }
   }
 
-  for (let i = 0; i < FIREFLY_COUNT; i++) {
+  for (let i = 0; i < fireflyLoopCount; i++) {
     const f = ff[i];
+
+    if (!f.isTemp && i >= ffPermMax) {
+      f.brightness *= 0.88;
+      ffPositions[i * 3]     = -9999;
+      ffPositions[i * 3 + 1] = -9999;
+      ffPositions[i * 3 + 2] = -9999;
+      ffBrightness[i]        = 0;
+      continue;
+    }
 
     const windPush = gustStrength * 1.2 * delta;
     f.windAccumX += gustDirX * windPush;
@@ -3386,7 +3691,7 @@ function hideLoadingScreen() {
   sceneReady = true;
   overlay.classList.add('hidden');
   customCursor.style.display = 'block';
-  customCursor.style.opacity = '1';
+  syncCustomCursorVisibility();
   setTimeout(() => overlay.remove(), 900);
 }
 
@@ -3416,6 +3721,7 @@ function animate() {
     return;
   }
 
+  const frameStart = devMode ? performance.now() : 0;
   const delta = clock.getDelta();
   const safeDelta = Math.min(delta, 0.05);
   const elapsed = clock.elapsedTime;
@@ -3490,7 +3796,11 @@ function animate() {
     rainT = isRain ? ease : 1.0 - ease;
     if (p >= 1.0) {
       rainTransitioning = false;
-      if (!isRain && rainAudioEl && !rainAudioEl.paused) rainAudioEl.pause();
+      if (!isRain) {
+        if (rainAudioEl && !rainAudioEl.paused) rainAudioEl.pause();
+        stopRainGustDsp();
+        setRainInScene(false);
+      }
     }
     applyWeather();
   } else if (todActive) {
@@ -3512,6 +3822,20 @@ function animate() {
 
   updateCursorDirection();
   updateCustomCursorScale();
+
+  // ── RT idle-skip tracking ────────────────────────────────────────────────
+  const cursorOnField = cursorTrailUV.x >= 0 && cursorTrailUV.x <= 1 &&
+                        cursorTrailUV.y >= 0 && cursorTrailUV.y <= 1;
+  if (cursorOnField) {
+    trailOffFieldFrames = 0;
+    trailHasResidual    = true;
+  } else {
+    trailOffFieldFrames++;
+    if (trailOffFieldFrames >= TRAIL_FADE_FRAMES) trailHasResidual = false;
+  }
+  if (mowHasActive && (mowElapsed - lastMowTime) > MAX_REGROW_TIME) mowHasActive = false;
+  // ────────────────────────────────────────────────────────────────────────
+
   updateTrail();
   updateMow(safeDelta);
   if (cutDragGain && audioCtx) {
@@ -3543,21 +3867,13 @@ function animate() {
 
   updateFireflyGlowInstances(safeDelta);
 
-  updateRain(safeDelta);
+  if (rainT > 0) updateRain(safeDelta);
 
-  if (rainAudioGain && audioCtx && !audioMuted) {
-    if (rainTransitioning) {
-      rainAudioGain.gain.setTargetAtTime(rainT * 0.12, audioCtx.currentTime, 0.15);
-    }
-    rainGustGain.gain.setTargetAtTime(0.0, audioCtx.currentTime, 0.05);
+  if (rainAudioGain && audioCtx && !audioMuted && rainTransitioning) {
+    rainAudioGain.gain.setTargetAtTime(rainT * 0.12, audioCtx.currentTime, 0.15);
   }
-  if (musicMasterGain && audioCtx) {
-    if (rainTransitioning) {
-      musicMasterGain.gain.setTargetAtTime(1.0 - rainT, audioCtx.currentTime, 0.15);
-    }
-  }
-  if (rainAudioGain && !rainTransitioning && isRain) {
-    console.log('rainAudioGain:', rainAudioGain.gain.value);
+  if (musicMasterGain && audioCtx && rainTransitioning) {
+    musicMasterGain.gain.setTargetAtTime(1.0 - rainT, audioCtx.currentTime, 0.15);
   }
 
   grassNear.updateMatrixWorld();
@@ -3579,7 +3895,30 @@ function animate() {
   clipMat.uniforms.modelViewMatrix.value.copy(camera.matrixWorldInverse);
   fireflyGlowMat.uniforms.projectionMatrix.value.copy(camera.projectionMatrix);
   fireflyGlowMat.uniforms.modelViewMatrix.value.copy(camera.matrixWorldInverse);
+
+  const preRender = devMode ? performance.now() : 0;
   renderer.render(scene, camera);
+  if (devMode) {
+    const renderMs = performance.now() - preRender;
+    const cpuMs = preRender - frameStart;
+    renderDiagFrames++;
+    if (renderDiagFrames % 120 === 0) {
+      console.log(
+        'drawCalls:', renderer.info.render.calls,
+        'triangles:', renderer.info.render.triangles,
+        'geometries:', renderer.info.memory.geometries,
+        'textures:', renderer.info.memory.textures,
+        'renderMs:', renderMs.toFixed(2),
+        'cpuMs:', cpuMs.toFixed(2),
+        'perfMode:', perfMode,
+        'DPR:', renderer.getPixelRatio(),
+        'canvas:', renderer.domElement.width + 'x' + renderer.domElement.height,
+        'mapTex:', mapTexSize,
+        'blades:', grassNear.count + grassFar.count + grassVeryFar.count,
+        'rainT:', rainT
+      );
+    }
+  }
 }
 
 renderer.setAnimationLoop(() => {
@@ -3589,7 +3928,14 @@ renderer.setAnimationLoop(() => {
   tryHideLoader();
 });
 
-console.log(`Touch Grass WebGL — ${BLADE_COUNT + BLADE_VERY_FAR} instanced blades`);
+if (devMode) {
+  logPerfDiagnostics('init');
+  console.log('shadowMap:', renderer.shadowMap.enabled);
+}
+console.log(
+  `Touch Grass WebGL — ${grassNear.count + grassFar.count + grassVeryFar.count} instanced blades`,
+  perfMode ? '(perf)' : '(HQ)'
+);
 </script>
 
 <div id="loading-overlay">
