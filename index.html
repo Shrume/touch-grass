@@ -52,7 +52,9 @@ canvas {
 .sw, .sw *,
 #info-card, #info-card a,
 #ff-dev-panel, #ff-dev-panel button, #ff-dev-panel .ff-dev-header,
-#ff-dev-panel .ff-dev-header * {
+#ff-dev-panel .ff-dev-header *,
+#grass-dev-panel, #grass-dev-panel button, #grass-dev-panel .ff-dev-header,
+#grass-dev-panel .ff-dev-header *, #grass-dev-panel input {
   cursor: pointer !important;
 }
 #sw-group {
@@ -159,6 +161,61 @@ canvas {
   cursor: pointer;
 }
 #ff-dev-panel .ff-dev-body button:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+#grass-dev-panel {
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+#grass-dev-panel.grass-dev-collapsed .ff-dev-chevron {
+  transform: rotate(-90deg);
+}
+#grass-dev-panel .grass-dev-body {
+  padding: 0 12px 10px;
+}
+#grass-dev-panel.grass-dev-collapsed .grass-dev-body {
+  display: none;
+}
+#grass-dev-panel .dev-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0;
+}
+#grass-dev-panel .dev-row label {
+  flex: 0 0 52px;
+  opacity: 0.85;
+}
+#grass-dev-panel .dev-row input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  accent-color: #ffffff;
+}
+#grass-dev-panel .dev-row input[type="number"] {
+  flex: 0 0 58px;
+  width: 58px;
+  padding: 3px 4px;
+  font: inherit;
+  font-size: 10px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 3px;
+}
+#grass-dev-panel #grass-apply-btn {
+  width: 100%;
+  margin-top: 6px;
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 11px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+  cursor: pointer;
+}
+#grass-dev-panel #grass-apply-btn:hover {
   background: rgba(255, 255, 255, 0.25);
 }
 
@@ -565,9 +622,9 @@ let FF_REPEL_RADIUS   = 17;
 let FF_NIGHT_DELAY    = 2;
 
 // High quality (default)
-const NEAR_COUNT_HQ  = 145000;
+const NEAR_COUNT_HQ  = 30000;
 const NEAR_SEGS_HQ   = 3;
-const FAR_COUNT_HQ   = 100000;
+const FAR_COUNT_HQ   = 80000;
 const RAIN_COUNT_HQ  = 50000;
 
 // Performance mode — both tiers built at init; swap is scene add/remove only
@@ -576,7 +633,7 @@ const NEAR_SEGS_PQ   = 2;
 const FAR_COUNT_PQ   = 65000;
 const RAIN_COUNT_PQ  = 20000;
 
-const VERY_FAR_COUNT_HQ = 50000;
+const VERY_FAR_COUNT_HQ = 55000;
 const VERY_FAR_COUNT_PQ = 25000;
 const BLADE_COUNT_HQ  = NEAR_COUNT_HQ + FAR_COUNT_HQ;
 
@@ -933,36 +990,36 @@ function spawnGust() {
 }
 
 function updateGust(delta) {
-  gust.phaseTimer += delta;
-
-  if (gust.state === 'CALM') {
-    gust.calmTimer -= delta;
-    gust.strength = 0;
-    const springSettled = Math.abs(springPos) < 0.03 && Math.abs(springVel) < 0.05;
-    if (gust.calmTimer <= 0 && (springSettled || gust.phaseTimer > 8.0)) spawnGust();
-  } else if (gust.state === 'BUILDING') {
-    const t = Math.min(1, gust.phaseTimer / gust.buildDuration);
-    gust.strength = t * t * gust.targetStrength;
-    gust.frontX += gust.dirX * gust.speed * delta;
-    if (t >= 1) { gust.state = 'ACTIVE'; gust.phaseTimer = 0; }
-  } else if (gust.state === 'ACTIVE') {
-    gust.frontX += gust.dirX * gust.speed * delta;
-    gust.strength = gust.targetStrength;
-    if (gust.dirX > 0 ? gust.frontX > fieldMaxX + 20 : gust.frontX < fieldMinX - 20) {
-      gust.state = 'FADING';
-      gustFadeStart = gust.strength;
-      gust.phaseTimer = 0;
-    }
-  } else if (gust.state === 'FADING') {
-    // Step to 0 immediately — spring handles the visual recovery with overshoot
-    gust.strength = 0;
-    gust.frontX += gust.dirX * gust.speed * delta;
-    if (gust.phaseTimer >= 0.05) {
-      gust.state = 'CALM';
-      gust.calmTimer = 0.5 + Math.random() * 2.5;
-      gust.phaseTimer = 0;
-    }
-  }
+  // gust.phaseTimer += delta;
+  //
+  // if (gust.state === 'CALM') {
+  //   gust.calmTimer -= delta;
+  //   gust.strength = 0;
+  //   const springSettled = Math.abs(springPos) < 0.03 && Math.abs(springVel) < 0.05;
+  //   if (gust.calmTimer <= 0 && (springSettled || gust.phaseTimer > 8.0)) spawnGust();
+  // } else if (gust.state === 'BUILDING') {
+  //   const t = Math.min(1, gust.phaseTimer / gust.buildDuration);
+  //   gust.strength = t * t * gust.targetStrength;
+  //   gust.frontX += gust.dirX * gust.speed * delta;
+  //   if (t >= 1) { gust.state = 'ACTIVE'; gust.phaseTimer = 0; }
+  // } else if (gust.state === 'ACTIVE') {
+  //   gust.frontX += gust.dirX * gust.speed * delta;
+  //   gust.strength = gust.targetStrength;
+  //   if (gust.dirX > 0 ? gust.frontX > fieldMaxX + 20 : gust.frontX < fieldMinX - 20) {
+  //     gust.state = 'FADING';
+  //     gustFadeStart = gust.strength;
+  //     gust.phaseTimer = 0;
+  //   }
+  // } else if (gust.state === 'FADING') {
+  //   // Step to 0 immediately — spring handles the visual recovery with overshoot
+  //   gust.strength = 0;
+  //   gust.frontX += gust.dirX * gust.speed * delta;
+  //   if (gust.phaseTimer >= 0.05) {
+  //     gust.state = 'CALM';
+  //     gust.calmTimer = 0.5 + Math.random() * 2.5;
+  //     gust.phaseTimer = 0;
+  //   }
+  // }
 }
 
 gust.state = 'CALM';
@@ -1252,7 +1309,7 @@ function stopRainGustDsp() {
 function scheduleThunder() {
   if (!isRain || !audioCtx) return;
   clearTimeout(thunderTimeout);
-  const delay = 15000 + Math.random() * 35000;
+  const delay = 35000 + Math.random() * 45000;
   thunderTimeout = setTimeout(fireThunder, delay);
 }
 
@@ -1263,7 +1320,7 @@ function fireThunder() {
   src.buffer = thunderBuffer;
 
   const gain = audioCtx.createGain();
-  gain.gain.value = 0.35 + Math.random() * 0.15;
+  gain.gain.value = 0.15 + Math.random() * 0.10;
 
   src.connect(gain);
   gain.connect(audioCtx.destination);
@@ -1497,24 +1554,25 @@ function updateAudioFromTrail() {
     overCut ? 1.8 : 1.2, audioCtx.currentTime, 0.12);
   panner.pan.value = Math.max(-1, Math.min(1, (mouseScreenX / window.innerWidth) * 2 - 1));
 
-  const gustAudioStrength = gust.strength;
-
-  if (gustAudioStrength > smoothWindActivity) {
-    smoothWindActivity = smoothWindActivity * 0.5 + gustAudioStrength * 0.5;
-  } else {
-    smoothWindActivity = smoothWindActivity * 0.96 + gustAudioStrength * 0.04;
-  }
-
-  if (windPanner) {
-    windPanner.positionX.value = gust.frontX * 0.4;
-    const gustProgress = Math.max(0, Math.min(1,
-      (gust.frontX - fieldMinX) / (fieldMaxX - fieldMinX)));
-    windPanner.positionZ.value = -80 + gustProgress * 40;
-  }
+  // const gustAudioStrength = gust.strength;
+  //
+  // if (gustAudioStrength > smoothWindActivity) {
+  //   smoothWindActivity = smoothWindActivity * 0.5 + gustAudioStrength * 0.5;
+  // } else {
+  //   smoothWindActivity = smoothWindActivity * 0.96 + gustAudioStrength * 0.04;
+  // }
+  //
+  // if (windPanner) {
+  //   windPanner.positionX.value = gust.frontX * 0.4;
+  //   const gustProgress = Math.max(0, Math.min(1,
+  //     (gust.frontX - fieldMinX) / (fieldMaxX - fieldMinX)));
+  //   windPanner.positionZ.value = -80 + gustProgress * 40;
+  // }
 
   const windAudioScale = 1.0 - rainT;
-  gainWhoosh.gain.value = audioMuted ? 0 : smoothWindActivity * 0.009 * windAudioScale;
-  whooshFilter.frequency.value = 300 + smoothWindActivity * 250;
+  // gainWhoosh.gain.value = audioMuted ? 0 : smoothWindActivity * 0.009 * windAudioScale;
+  // whooshFilter.frequency.value = 300 + smoothWindActivity * 250;
+  if (gainWhoosh) gainWhoosh.gain.value = 0;
   whooshFilter.Q.value = 0.5;
   gainRustle.gain.value = audioMuted ? 0 : smoothWindActivity * 0.072 * windAudioScale;
   rustleFilter.frequency.value = 2400 + smoothWindActivity * 1600;
@@ -1565,7 +1623,7 @@ document.addEventListener('mouseenter', () => {
   syncCustomCursorVisibility();
 });
 document.querySelectorAll(
-  '#sw-group, .ui-btn, .sw, #info-card, #info-card a, #ff-dev-panel, #ff-dev-panel button, #ff-dev-panel .ff-dev-header'
+  '#sw-group, .ui-btn, .sw, #info-card, #info-card a, #ff-dev-panel, #ff-dev-panel button, #ff-dev-panel .ff-dev-header, #grass-dev-panel, #grass-dev-panel button, #grass-dev-panel input'
 ).forEach((el) => {
   el.addEventListener('mouseenter', () => {
     uiChromeHoverDepth++;
@@ -1663,6 +1721,15 @@ function computeFieldBounds() {
   fieldMaxX = locked.maxX + visW * 0.06;
   fieldMinZ = locked.minZ - visD * 0.06;
   fieldMaxZ = locked.maxZ + visD * 0.06;
+}
+
+let _grassXHalfFar, _grassXHalfNear;
+
+function xHalfAtZ(worldZ) {
+  const depthT = (worldZ - fieldMinZ) / (fieldMaxZ - fieldMinZ);
+  const baseHalf = _grassXHalfFar + (_grassXHalfNear - _grassXHalfFar) * depthT;
+  const margin = 2.5 + (1.5 - 2.5) * depthT;
+  return baseHalf + margin;
 }
 
 const camera = new THREE.PerspectiveCamera(
@@ -1998,10 +2065,37 @@ const grassNearMat = grassMaterial;
 
 computeFieldBounds();
 
+_grassXHalfFar = (fieldMaxX - fieldMinX) / 2;
+{
+  const boundsRaycaster = new THREE.Raycaster();
+  const boundsCam = new THREE.PerspectiveCamera(
+    CAM_INTRO_END_FOV, FIELD_REFERENCE_ASPECT, 0.1, 200
+  );
+  boundsCam.position.set(0, CAM_INTRO_END_Y, CAM_INTRO_END_Z);
+  boundsCam.lookAt(0, CAM_LOOK_Y, CAM_LOOK_Z);
+  boundsCam.updateProjectionMatrix();
+  boundsCam.updateMatrixWorld(true);
+  const xs = [];
+  for (let xi = -1; xi <= 1; xi++) {
+    for (let yi = -1; yi <= 1; yi++) {
+      boundsRaycaster.setFromCamera(new THREE.Vector2(xi, yi), boundsCam);
+      const dir = boundsRaycaster.ray.direction;
+      const orig = boundsRaycaster.ray.origin;
+      if (Math.abs(dir.z) < 0.001) continue;
+      const t = (fieldMaxZ - orig.z) / dir.z;
+      if (t <= 0) continue;
+      xs.push(orig.x + t * dir.x);
+    }
+  }
+  _grassXHalfNear = (Math.max(...xs) - Math.min(...xs)) / 2;
+}
+
 console.log(
   'Field bounds (fixed, aspect', FIELD_REFERENCE_ASPECT.toFixed(3) + '):',
   fieldMinX, fieldMaxX, fieldMinZ, fieldMaxZ
 );
+console.log('xHalfAtZ near edge (fieldMaxZ):', xHalfAtZ(fieldMaxZ));
+console.log('xHalfAtZ far edge (fieldMinZ):', xHalfAtZ(fieldMinZ));
 
 const fieldAspect = (fieldMaxZ - fieldMinZ) / (fieldMaxX - fieldMinX);
 trailMaterial.uniforms.uFieldAspect.value = fieldAspect;
@@ -2035,7 +2129,7 @@ function buildGrassGeometry(segments) {
   return geo;
 }
 
-function populateGrassInstances(mesh, count, tier) {
+function populateGrassMesh(mesh, count, tier) {
   const geo = mesh.geometry;
   const aHeight = new Float32Array(count);
   const aWidth  = new Float32Array(count);
@@ -2046,15 +2140,17 @@ function populateGrassInstances(mesh, count, tier) {
   geo.setAttribute('aLean',   new THREE.InstancedBufferAttribute(aLean, 1));
   geo.setAttribute('aRandom', new THREE.InstancedBufferAttribute(aRandom, 1));
 
+  const fieldCenterX = (fieldMinX + fieldMaxX) / 2;
+
   for (let n = 0; n < count; n++) {
-    const col = n % _grassPlacementCols;
-    const x   = fieldMinX + (col + Math.random()) * _grassSlotW;
     const zT  = tier === 'near'
       ? 0.28 + Math.pow(Math.random(), 0.22) * 0.72
       : tier === 'far'
-      ? Math.pow(Math.random(), 2.2) * 0.88
-      : Math.pow(Math.random(), 3.5) * 0.60;
+      ? Math.pow(Math.random(), 1.4) * 0.95
+      : Math.pow(Math.random(), 1.8) * 0.98;
     const z   = fieldMinZ + zT * (fieldMaxZ - fieldMinZ);
+    const xHalf = xHalfAtZ(z);
+    const x = fieldCenterX + (Math.random() * 2 - 1) * xHalf;
     const depthT  = (z - fieldMinZ) / (fieldMaxZ - fieldMinZ);
     const height  = 0.4 + Math.random() * 0.8;
     const lean    = -0.25 + Math.random() * 0.7;
@@ -2073,24 +2169,75 @@ function populateGrassInstances(mesh, count, tier) {
   mesh.instanceMatrix.needsUpdate = true;
 }
 
+let _grassFieldSphere;
+
+function applyGrassBoundingSphere(mesh) {
+  if (_grassFieldSphere) {
+    mesh.geometry.boundingSphere = _grassFieldSphere.clone();
+    mesh.frustumCulled = true;
+  }
+}
+
+function repopulateGrassTier(mesh, count, tier, buildFn) {
+  if (count > mesh.instanceMatrix.count) {
+    if (mesh.parent) mesh.parent.remove(mesh);
+    mesh.geometry.dispose();
+    mesh = buildFn(count);
+    applyGrassBoundingSphere(mesh);
+    scene.add(mesh);
+    return mesh;
+  }
+  populateGrassMesh(mesh, count, tier);
+  mesh.count = count;
+  return mesh;
+}
+
+function populateGrassInstances(nearCount, farCount, vfarCount) {
+  nearCount  = nearCount  ?? NEAR_COUNT_HQ;
+  farCount   = farCount   ?? FAR_COUNT_HQ;
+  vfarCount  = vfarCount  ?? VERY_FAR_COUNT_HQ;
+
+  const nearSegs = perfMode ? NEAR_SEGS_PQ : NEAR_SEGS_HQ;
+
+  grassNear = repopulateGrassTier(
+    grassNear, nearCount, 'near', (c) => buildGrassNearMesh(c, nearSegs)
+  );
+  grassFar = repopulateGrassTier(
+    grassFar, farCount, 'far', (c) => buildGrassFarMesh(c)
+  );
+  grassVeryFar = repopulateGrassTier(
+    grassVeryFar, vfarCount, 'veryFar', (c) => buildGrassVeryFarMesh(c)
+  );
+
+  if (perfMode) {
+    grassNearPQ    = grassNear;
+    grassFarPQ     = grassFar;
+    grassVeryFarPQ = grassVeryFar;
+  } else {
+    grassNearHQ    = grassNear;
+    grassFarHQ     = grassFar;
+    grassVeryFarHQ = grassVeryFar;
+  }
+}
+
 function buildGrassNearMesh(count, segments) {
   const mesh = new THREE.InstancedMesh(buildGrassGeometry(segments), grassNearMat, count);
   mesh.frustumCulled = false;
-  populateGrassInstances(mesh, count, 'near');
+  populateGrassMesh(mesh, count, 'near');
   return mesh;
 }
 
 function buildGrassFarMesh(count) {
   const mesh = new THREE.InstancedMesh(buildGrassGeometry(2), grassFarMat, count);
   mesh.frustumCulled = false;
-  populateGrassInstances(mesh, count, 'far');
+  populateGrassMesh(mesh, count, 'far');
   return mesh;
 }
 
 function buildGrassVeryFarMesh(count) {
   const mesh = new THREE.InstancedMesh(buildGrassGeometry(1), grassMaterialVeryFar, count);
   mesh.frustumCulled = false;
-  populateGrassInstances(mesh, count, 'veryFar');
+  populateGrassMesh(mesh, count, 'veryFar');
   return mesh;
 }
 
@@ -2115,6 +2262,7 @@ const grassVeryFarPQ = buildGrassVeryFarMesh(VERY_FAR_COUNT_PQ);
     new THREE.Vector3(cx, maxH * 0.5, cz),
     Math.sqrt(rx * rx + rz * rz + maxH * maxH)
   );
+  _grassFieldSphere = sphere.clone();
   const meshes = [
     grassNearHQ, grassNearPQ,
     grassFarHQ,  grassFarPQ,
@@ -2439,7 +2587,7 @@ function applyWeather() {
   _wVecRain.lerpVectors(_rainFogDay, _rainFogNight, t);
   u.uRainFogColor.value.lerpVectors(_wVecSunny, _wVecRain, r);
   groundMaterial.uniforms.uRainFogColor.value.lerpVectors(_wVecSunny, _wVecRain, r);
-  const rainFogStr = (0.72 + (0.65 - 0.72) * t) * r;
+  const rainFogStr = (0.35 + (0.65 - 0.72) * t) * r;
   u.uRainFogStrength.value = rainFogStr;
   groundMaterial.uniforms.uRainFogStrength.value = rainFogStr;
 
@@ -2911,7 +3059,6 @@ const fireflyGlowMat = new THREE.ShaderMaterial({
     uVisible:         { value: 0.0 },
   },
   vertexShader: /* glsl */`
-    attribute mat4 instanceMatrix;
     varying vec2 vUv;
     varying vec3 vWorldPos;
 
@@ -3206,6 +3353,90 @@ const FF_NIGHT_DELAY = ${FF_NIGHT_DELAY};
   ffBody.appendChild(exportBtn);
 
   syncFireflyDevUniforms();
+
+  // Grass density dev panel — nested in ff-dev-panel, collapsible like fireflies
+  const grassDevPanel = document.createElement('div');
+  grassDevPanel.id = 'grass-dev-panel';
+  grassDevPanel.classList.add('grass-dev-collapsed');
+
+  const grassHeader = document.createElement('button');
+  grassHeader.type = 'button';
+  grassHeader.className = 'ff-dev-header';
+  grassHeader.setAttribute('aria-expanded', 'false');
+  const grassHeaderTitle = document.createElement('span');
+  grassHeaderTitle.textContent = 'Grass Density (dev)';
+  const grassChevron = document.createElement('span');
+  grassChevron.className = 'ff-dev-chevron';
+  grassChevron.textContent = '▼';
+  grassHeader.append(grassHeaderTitle, grassChevron);
+
+  const grassBody = document.createElement('div');
+  grassBody.className = 'grass-dev-body';
+
+  grassHeader.addEventListener('click', () => {
+    const collapsed = grassDevPanel.classList.toggle('grass-dev-collapsed');
+    grassHeader.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  });
+
+  function addGrassRow(labelText, sliderId, inputId, min, max) {
+    const row = document.createElement('div');
+    row.className = 'dev-row';
+    const lbl = document.createElement('label');
+    lbl.textContent = labelText;
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.id = sliderId;
+    slider.min = String(min);
+    slider.max = String(max);
+    slider.step = '1000';
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.id = inputId;
+    input.min = String(min);
+    input.max = String(max);
+    input.step = '1000';
+    row.append(lbl, slider, input);
+    grassBody.appendChild(row);
+    return { slider, input };
+  }
+
+  const { slider: nearSlider, input: nearInput } = addGrassRow(
+    'Near', 'grass-near-slider', 'grass-near-input', 10000, 200000
+  );
+  const { slider: farSlider, input: farInput } = addGrassRow(
+    'Far', 'grass-far-slider', 'grass-far-input', 10000, 150000
+  );
+  const { slider: vfarSlider, input: vfarInput } = addGrassRow(
+    'Very Far', 'grass-vfar-slider', 'grass-vfar-input', 5000, 80000
+  );
+
+  const grassApplyBtn = document.createElement('button');
+  grassApplyBtn.id = 'grass-apply-btn';
+  grassApplyBtn.textContent = 'Apply & Rebuild';
+  grassBody.appendChild(grassApplyBtn);
+
+  grassDevPanel.append(grassHeader, grassBody);
+  ffPanel.appendChild(grassDevPanel);
+
+  nearSlider.value = nearInput.value = grassNear.count;
+  farSlider.value  = farInput.value  = grassFar.count;
+  vfarSlider.value = vfarInput.value = grassVeryFar.count;
+
+  function syncGrass(slider, input) {
+    slider.addEventListener('input', () => { input.value = slider.value; });
+    input.addEventListener('input', () => { slider.value = input.value; });
+  }
+  syncGrass(nearSlider, nearInput);
+  syncGrass(farSlider,  farInput);
+  syncGrass(vfarSlider, vfarInput);
+
+  grassApplyBtn.addEventListener('click', () => {
+    const newNear = parseInt(nearInput.value, 10);
+    const newFar  = parseInt(farInput.value, 10);
+    const newVFar = parseInt(vfarInput.value, 10);
+    populateGrassInstances(newNear, newFar, newVFar);
+    console.log(`Grass counts updated — near: ${newNear} far: ${newFar} vfar: ${newVFar}`);
+  });
 }
 
 const clipBladeGeo = new THREE.PlaneGeometry(1, 1, 1, 3);
@@ -3731,31 +3962,33 @@ function animate() {
 
   updateGust(safeDelta);
 
-  const springTarget    = gust.strength;
-  const springStiffness = SPRING_STIFFNESS_BASE + rainT * (SPRING_STIFFNESS_RAIN - SPRING_STIFFNESS_BASE);
-  const springDamping   = SPRING_DAMPING_BASE   + rainT * (SPRING_DAMPING_RAIN   - SPRING_DAMPING_BASE);
-  const springForce = (springTarget - springPos) * springStiffness;
-  // High damping only after spring has had 5s in CALM; rain version stays bent longer
-  const activeDamping = (gust.state === 'CALM' && gust.phaseTimer > 5.0) ? springDamping * 4 : springDamping;
-  const dampForce = springVel * activeDamping;
-  springVel += (springForce - dampForce) * safeDelta;
-  springPos += springVel * safeDelta;
-
-  if (gust.state === 'ACTIVE' || gust.state === 'FADING') {
-    gustBlend = Math.min(1.0, gustBlend + safeDelta * 2.0);
-  } else if (gust.state === 'BUILDING') {
-    gustBlend = Math.min(1.0, gustBlend + safeDelta * 1.5);
-  } else {
-    const springSettled = Math.abs(springPos) < 0.03 && Math.abs(springVel) < 0.05;
-    if (springSettled) {
-      gustBlend = Math.max(0.0, gustBlend - safeDelta * 3.0);
-    }
-  }
-  grassMaterial.uniforms.uGustBlend.value = gustBlend * (1.0 - rainT);
+  // const springTarget    = gust.strength;
+  // const springStiffness = SPRING_STIFFNESS_BASE + rainT * (SPRING_STIFFNESS_RAIN - SPRING_STIFFNESS_BASE);
+  // const springDamping   = SPRING_DAMPING_BASE   + rainT * (SPRING_DAMPING_RAIN   - SPRING_DAMPING_BASE);
+  // const springForce = (springTarget - springPos) * springStiffness;
+  // // High damping only after spring has had 5s in CALM; rain version stays bent longer
+  // const activeDamping = (gust.state === 'CALM' && gust.phaseTimer > 5.0) ? springDamping * 4 : springDamping;
+  // const dampForce = springVel * activeDamping;
+  // springVel += (springForce - dampForce) * safeDelta;
+  // springPos += springVel * safeDelta;
+  //
+  // if (gust.state === 'ACTIVE' || gust.state === 'FADING') {
+  //   gustBlend = Math.min(1.0, gustBlend + safeDelta * 2.0);
+  // } else if (gust.state === 'BUILDING') {
+  //   gustBlend = Math.min(1.0, gustBlend + safeDelta * 1.5);
+  // } else {
+  //   const springSettled = Math.abs(springPos) < 0.03 && Math.abs(springVel) < 0.05;
+  //   if (springSettled) {
+  //     gustBlend = Math.max(0.0, gustBlend - safeDelta * 3.0);
+  //   }
+  // }
+  // grassMaterial.uniforms.uGustBlend.value = gustBlend * (1.0 - rainT);
+  grassMaterial.uniforms.uGustBlend.value = 0;
+  grassMaterial.uniforms.uGustStrength.value = 0;
 
   grassMaterial.uniforms.uTime.value = elapsed;
   grassMaterial.uniforms.uGustFrontX.value = gust.frontX;
-  grassMaterial.uniforms.uGustStrength.value = springPos;
+  // grassMaterial.uniforms.uGustStrength.value = springPos;
   currentWidth += (gust.width - currentWidth) * Math.min(1, safeDelta * 1.5);
   grassMaterial.uniforms.uGustWidth.value = currentWidth;
   const dirLerp = Math.min(1, safeDelta / Math.max(0.1, gust.buildDuration) * 3);
