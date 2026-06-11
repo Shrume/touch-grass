@@ -16,8 +16,10 @@ html, body {
 }
 canvas {
   display: block;
-  position: fixed;
-  inset: 0;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   cursor: none !important;
 }
 
@@ -585,12 +587,8 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
 document.body.appendChild(renderer.domElement);
 
 function updateDPR() {
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-  if (w === 0 || h === 0) return;
   const dpr = perfMode ? 0.75 : Math.min(window.devicePixelRatio, 1.0);
   renderer.setPixelRatio(dpr);
-  renderer.setSize(w, h);
 }
 
 // ── Mouse trail (ping-pong render target) ───────────────────────────────────
@@ -1669,19 +1667,24 @@ function computeFieldBounds() {
 
 const camera = new THREE.PerspectiveCamera(
   CAM_INTRO_END_FOV,
-  window.innerWidth / window.innerHeight,
+  16 / 9,
   0.1,
   200
 );
 camera.position.set(0, CAM_INTRO_END_Y, CAM_INTRO_END_Z);
 camera.lookAt(0, CAM_LOOK_Y, CAM_LOOK_Z);
+camera.aspect = 16 / 9;
+camera.updateProjectionMatrix();
 
 function updateRendererSize() {
-  const w = window.innerWidth;
-  const h = window.innerHeight;
-  if (w === 0 || h === 0) return;
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
+  const TARGET_ASPECT = 16 / 9;
+  const winW = window.innerWidth;
+  const winH = window.innerHeight;
+  if (winW === 0 || winH === 0) return;
+  const isWider = (winW / winH) > TARGET_ASPECT;
+  const renderW = isWider ? winW : Math.ceil(winH * TARGET_ASPECT);
+  const renderH = isWider ? Math.ceil(winW / TARGET_ASPECT) : winH;
+  renderer.setSize(renderW, renderH);
   updateDPR();
 }
 
@@ -3880,15 +3883,6 @@ function animate() {
   grassFar.updateMatrixWorld();
   grassVeryFar.updateMatrixWorld();
   camera.updateMatrixWorld();
-  const canvasW = window.innerWidth;
-  const canvasH = window.innerHeight;
-  if (canvasW > 0 && canvasH > 0) {
-    const nextAspect = canvasW / canvasH;
-    if (Math.abs(camera.aspect - nextAspect) > 0.001) {
-      camera.aspect = nextAspect;
-      camera.updateProjectionMatrix();
-    }
-  }
   grassMaterial.uniforms.projectionMatrix.value.copy(camera.projectionMatrix);
   grassMaterial.uniforms.modelViewMatrix.value.copy(camera.matrixWorldInverse).multiply(grassNear.matrixWorld);
   clipMat.uniforms.projectionMatrix.value.copy(camera.projectionMatrix);
