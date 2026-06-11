@@ -57,6 +57,9 @@ canvas {
 #grass-dev-panel .ff-dev-header *, #grass-dev-panel input {
   cursor: pointer !important;
 }
+#perf-dev {
+  cursor: text !important;
+}
 #sw-group {
   cursor: default !important;
 }
@@ -71,6 +74,23 @@ canvas {
   font-size: 12px;
   color: #ffffff;
   pointer-events: none;
+}
+
+#perf-dev {
+  display: none;
+  position: fixed;
+  top: 28px;
+  left: 12px;
+  z-index: 200;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(0, 0, 0, 0.45);
+  padding: 4px 8px;
+  border-radius: 4px;
+  pointer-events: auto;
+  user-select: text;
+  line-height: 1.6;
 }
 
 #ff-dev-panel {
@@ -521,6 +541,7 @@ canvas {
 <body>
 
 <div id="fps-dev"></div>
+<div id="perf-dev"></div>
 <div id="ff-dev-panel"></div>
 <div id="custom-cursor" aria-hidden="true">
   <img id="custom-cursor-hand" src="assets/Hand32.svg" width="32" height="32" alt="">
@@ -593,26 +614,45 @@ import * as THREE from 'three';
 
 const devMode = window.location.search.includes('dev');
 const fpsEl = document.getElementById('fps-dev');
+const perfEl = document.getElementById('perf-dev');
 if (fpsEl) fpsEl.style.display = devMode ? 'block' : 'none';
+if (devMode && perfEl) {
+  perfEl.style.display = 'block';
+  perfEl.textContent = 'perf…';
+}
 let fpsFrames = 0;
 let fpsIntervalStart = performance.now();
 let renderDiagFrames = 0;
-let perfMode = localStorage.getItem('perfMode') === 'true';
+let lastFrameTime = 0;
+let frameMs = 0;
 
-const FF_PERM_HQ  = 280;
-const FF_TEMP_HQ  = 40;
-const FF_PERM_PQ  = 80;
-const FF_TEMP_PQ  = 0;
-const FF_GLOW_HQ  = 12;
-const FF_GLOW_PQ  = 6;
+function finishPerfDiag(preRender, frameStart) {
+  if (!devMode || !perfEl) return;
+  const renderMs = performance.now() - preRender;
+  const cpuMs = preRender - frameStart;
+  renderDiagFrames++;
+  if (renderDiagFrames !== 1 && renderDiagFrames % 120 !== 0) return;
+  perfEl.innerHTML = [
+    `frame: ${frameMs.toFixed(1)}ms  fps: ${frameMs > 0 ? (1000 / frameMs).toFixed(0) : '—'}`,
+    `draw: ${renderer.info.render.calls}  tris: ${(renderer.info.render.triangles / 1000).toFixed(0)}k`,
+    `render: ${renderMs.toFixed(2)}ms  cpu: ${cpuMs.toFixed(2)}ms  gpu: ${_gpuMs.toFixed(1)}ms`,
+    `blades: ${grassNear.count + grassFar.count + grassVeryFar.count}  DPR: ${renderer.getPixelRatio()}`,
+    `canvas: ${renderer.domElement.width}×${renderer.domElement.height}`,
+    `rain: ${rainT.toFixed(2)}`
+  ].join('<br>');
+}
 
-let FIREFLY_PERMANENT = FF_PERM_HQ;
-let FIREFLY_TEMP      = FF_TEMP_HQ;
+const FF_PERM  = 280;
+const FF_TEMP  = 40;
+const FF_GLOW  = 12;
+
+let FIREFLY_PERMANENT = FF_PERM;
+let FIREFLY_TEMP      = FF_TEMP;
 let FIREFLY_COUNT     = FIREFLY_PERMANENT + FIREFLY_TEMP;
-let fireflyLoopCount  = FIREFLY_COUNT;   // reduced in perf mode to skip inactive slots
-let ffPermMax         = FF_PERM_HQ;
-let ffTempMax         = FF_TEMP_HQ;
-let ffGlowSlotCount   = FF_GLOW_HQ;
+const fireflyLoopCount = FIREFLY_COUNT;
+const ffPermMax       = FF_PERM;
+const ffTempMax       = FF_TEMP;
+const ffGlowSlotCount = FF_GLOW;
 let FF_SIZE_BASE      = 100;
 let FF_BRI_MIN        = 2;
 let FF_BRI_RANGE      = 6;
@@ -621,21 +661,12 @@ let FF_GRASS_SCALE    = 0.35;
 let FF_REPEL_RADIUS   = 17;
 let FF_NIGHT_DELAY    = 2;
 
-// High quality (default)
-const NEAR_COUNT_HQ  = 30000;
-const NEAR_SEGS_HQ   = 3;
-const FAR_COUNT_HQ   = 80000;
-const RAIN_COUNT_HQ  = 50000;
-
-// Performance mode — both tiers built at init; swap is scene add/remove only
-const NEAR_COUNT_PQ  = 90000;
-const NEAR_SEGS_PQ   = 2;
-const FAR_COUNT_PQ   = 65000;
-const RAIN_COUNT_PQ  = 20000;
-
-const VERY_FAR_COUNT_HQ = 55000;
-const VERY_FAR_COUNT_PQ = 25000;
-const BLADE_COUNT_HQ  = NEAR_COUNT_HQ + FAR_COUNT_HQ;
+const NEAR_COUNT      = 50000;
+const NEAR_SEGS       = 3;
+const FAR_COUNT       = 80000;
+const VERY_FAR_COUNT  = 55000;
+const RAIN_COUNT      = 50000;
+const BLADE_COUNT     = NEAR_COUNT + FAR_COUNT;
 
 let fieldMinX, fieldMaxX, fieldMinZ, fieldMaxZ;
 
@@ -643,9 +674,14 @@ let fieldMinX, fieldMaxX, fieldMinZ, fieldMaxZ;
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
 document.body.appendChild(renderer.domElement);
 
+const _glContext = renderer.getContext();
+const _timerExt = _glContext.getExtension('EXT_disjoint_timer_query_webgl2');
+let _gpuQuery = null;
+let _gpuMs = 0;
+let _pendingQuery = null;
+
 function updateDPR() {
-  const dpr = perfMode ? 0.75 : Math.min(window.devicePixelRatio, 1.0);
-  renderer.setPixelRatio(dpr);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.0));
 }
 
 // ── Mouse trail (ping-pong render target) ───────────────────────────────────
@@ -659,13 +695,8 @@ function createMowRT(size) {
   });
 }
 
-const trailRTHQ = [createTrailRT(256), createTrailRT(256)];
-const trailRTPQ = [createTrailRT(128), createTrailRT(128)];
-const mowRTHQ   = [createMowRT(256), createMowRT(256)];
-const mowRTPQ   = [createMowRT(128), createMowRT(128)];
-
-let trailPair = trailRTHQ;
-let mowPair   = mowRTHQ;
+const trailPair = [createTrailRT(256), createTrailRT(256)];
+const mowPair   = [createMowRT(256), createMowRT(256)];
 let mapTexSize = 256;
 
 let trailRead  = trailPair[0];
@@ -2057,7 +2088,7 @@ const grassMaterial = new THREE.ShaderMaterial({
     uHazeDensity:     { value: 0.0 },
     uRainFogColor:    { value: new THREE.Vector3(0.72, 0.75, 0.68) },
     uRainFogStrength: { value: 0.0 },
-    uPerfMode:        { value: perfMode ? 1.0 : 0.0 },
+    uPerfMode:        { value: 0.0 },
   },
 });
 
@@ -2120,7 +2151,7 @@ grassMaterialVeryFar.uniforms = grassMaterial.uniforms;
 const grassVeryFarMat = grassMaterialVeryFar;
 
 const dummy = new THREE.Object3D();
-const _grassPlacementCols = Math.ceil(Math.sqrt(BLADE_COUNT_HQ * 2));
+const _grassPlacementCols = Math.ceil(Math.sqrt(BLADE_COUNT * 2));
 const _grassSlotW = (fieldMaxX - fieldMinX) / _grassPlacementCols;
 
 function buildGrassGeometry(segments) {
@@ -2193,14 +2224,12 @@ function repopulateGrassTier(mesh, count, tier, buildFn) {
 }
 
 function populateGrassInstances(nearCount, farCount, vfarCount) {
-  nearCount  = nearCount  ?? NEAR_COUNT_HQ;
-  farCount   = farCount   ?? FAR_COUNT_HQ;
-  vfarCount  = vfarCount  ?? VERY_FAR_COUNT_HQ;
-
-  const nearSegs = perfMode ? NEAR_SEGS_PQ : NEAR_SEGS_HQ;
+  nearCount  = nearCount  ?? NEAR_COUNT;
+  farCount   = farCount   ?? FAR_COUNT;
+  vfarCount  = vfarCount  ?? VERY_FAR_COUNT;
 
   grassNear = repopulateGrassTier(
-    grassNear, nearCount, 'near', (c) => buildGrassNearMesh(c, nearSegs)
+    grassNear, nearCount, 'near', (c) => buildGrassNearMesh(c, NEAR_SEGS)
   );
   grassFar = repopulateGrassTier(
     grassFar, farCount, 'far', (c) => buildGrassFarMesh(c)
@@ -2208,16 +2237,6 @@ function populateGrassInstances(nearCount, farCount, vfarCount) {
   grassVeryFar = repopulateGrassTier(
     grassVeryFar, vfarCount, 'veryFar', (c) => buildGrassVeryFarMesh(c)
   );
-
-  if (perfMode) {
-    grassNearPQ    = grassNear;
-    grassFarPQ     = grassFar;
-    grassVeryFarPQ = grassVeryFar;
-  } else {
-    grassNearHQ    = grassNear;
-    grassFarHQ     = grassFar;
-    grassVeryFarHQ = grassVeryFar;
-  }
 }
 
 function buildGrassNearMesh(count, segments) {
@@ -2241,17 +2260,10 @@ function buildGrassVeryFarMesh(count) {
   return mesh;
 }
 
-// HQ + PQ tiers live in GPU memory together (~60MB PQ grass extra) — instant scene swap
-const grassNearHQ    = buildGrassNearMesh(NEAR_COUNT_HQ, NEAR_SEGS_HQ);
-const grassNearPQ    = buildGrassNearMesh(NEAR_COUNT_PQ, NEAR_SEGS_PQ);
-const grassFarHQ     = buildGrassFarMesh(FAR_COUNT_HQ);
-const grassFarPQ     = buildGrassFarMesh(FAR_COUNT_PQ);
-const grassVeryFarHQ = buildGrassVeryFarMesh(VERY_FAR_COUNT_HQ);
-const grassVeryFarPQ = buildGrassVeryFarMesh(VERY_FAR_COUNT_PQ);
+let grassNear    = buildGrassNearMesh(NEAR_COUNT, NEAR_SEGS);
+let grassFar     = buildGrassFarMesh(FAR_COUNT);
+let grassVeryFar = buildGrassVeryFarMesh(VERY_FAR_COUNT);
 
-// Set correct bounding spheres so Three.js frustum culling is accurate.
-// The base PlaneGeometry bounding sphere is too small (covers only the unit quad).
-// We replace it with one that tightly wraps the full field extent + tallest blade.
 (function setGrassBoundingSpheres() {
   const cx    = (fieldMinX + fieldMaxX) * 0.5;
   const cz    = (fieldMinZ + fieldMaxZ) * 0.5;
@@ -2263,24 +2275,15 @@ const grassVeryFarPQ = buildGrassVeryFarMesh(VERY_FAR_COUNT_PQ);
     Math.sqrt(rx * rx + rz * rz + maxH * maxH)
   );
   _grassFieldSphere = sphere.clone();
-  const meshes = [
-    grassNearHQ, grassNearPQ,
-    grassFarHQ,  grassFarPQ,
-    grassVeryFarHQ, grassVeryFarPQ,
-  ];
-  for (const m of meshes) {
+  for (const m of [grassNear, grassFar, grassVeryFar]) {
     m.geometry.boundingSphere = sphere.clone();
     m.frustumCulled = true;
   }
 })();
 
-let grassNear    = grassNearHQ;
-let grassFar     = grassFarHQ;
-let grassVeryFar = grassVeryFarHQ;
-
-scene.add(grassNearHQ);
-scene.add(grassFarHQ);
-scene.add(grassVeryFarHQ);
+scene.add(grassNear);
+scene.add(grassFar);
+scene.add(grassVeryFar);
 
 const groundVertShader = /* glsl */`
 varying float vWorldZ;
@@ -2838,9 +2841,7 @@ function buildRainPool(count) {
   return pool;
 }
 
-const rainPoolHQ = buildRainPool(RAIN_COUNT_HQ);
-const rainPoolPQ = buildRainPool(RAIN_COUNT_PQ);
-let activeRainPool = rainPoolHQ;
+const activeRainPool = buildRainPool(RAIN_COUNT);
 
 function setRainInScene(inScene) {
   const m = activeRainPool.mesh;
@@ -2851,70 +2852,6 @@ function setRainInScene(inScene) {
     m.visible = false;
     if (m.parent) scene.remove(m);
   }
-}
-
-function applyPerfModeState() {
-  grassNearMat.side = perfMode ? THREE.FrontSide : THREE.DoubleSide;
-  grassNearMat.needsUpdate = true;
-
-  const pf = perfMode ? 1.0 : 0.0;
-  grassMaterial.uniforms.uPerfMode.value = pf;
-
-  trailPair = perfMode ? trailRTPQ : trailRTHQ;
-  mowPair   = perfMode ? mowRTPQ   : mowRTHQ;
-  mapTexSize = perfMode ? 128 : 256;
-  trailRead  = trailPair[0];
-  trailWrite = trailPair[1];
-  mowRead    = mowPair[0];
-  mowWrite   = mowPair[1];
-  bindTrailMowUniforms();
-
-  ffPermMax = perfMode ? FF_PERM_PQ : FF_PERM_HQ;
-  ffTempMax = perfMode ? FF_TEMP_PQ : FF_TEMP_HQ;
-  ffGlowSlotCount = perfMode ? FF_GLOW_PQ : FF_GLOW_HQ;
-  // Reduce firefly sim loop ceiling so inactive slots aren't iterated.
-  // Small headroom (10) above the active cap handles temp fireflies.
-  fireflyLoopCount = perfMode ? (FF_PERM_PQ + FF_TEMP_PQ + 10) : FIREFLY_COUNT;
-  if (perfMode) {
-    for (let i = ffPermMax; i < FIREFLY_PERMANENT; i++) {
-      ff[i].brightness = 0;
-      ff[i].ffInSet = false;
-      if (ffPositions) {
-        ffPositions[i * 3]     = -9999;
-        ffPositions[i * 3 + 1] = -9999;
-        ffPositions[i * 3 + 2] = -9999;
-        ffBrightness[i]        = 0;
-      }
-    }
-    if (ffGeo) ffGeo.attributes.position.needsUpdate = true;
-    resetFireflyGrassSlots();
-  }
-
-  if (perfMode) {
-    for (let i = CLIP_COUNT_PQ; i < CLIP_COUNT_HQ; i++) deactivateClip(i);
-  }
-  clipPoolMax = perfMode ? CLIP_COUNT_PQ : CLIP_COUNT_HQ;
-  clipMesh.count = clipPoolMax;
-
-  updateDPR();
-
-  scene.remove(grassNearHQ);
-  scene.remove(grassNearPQ);
-  scene.remove(grassFarHQ);
-  scene.remove(grassFarPQ);
-  scene.remove(grassVeryFarHQ);
-  scene.remove(grassVeryFarPQ);
-  grassNear    = perfMode ? grassNearPQ    : grassNearHQ;
-  grassFar     = perfMode ? grassFarPQ     : grassFarHQ;
-  grassVeryFar = perfMode ? grassVeryFarPQ : grassVeryFarHQ;
-  scene.add(grassNear);
-  scene.add(grassFar);
-  scene.add(grassVeryFar);
-
-  if (rainPoolHQ.mesh.parent) scene.remove(rainPoolHQ.mesh);
-  if (rainPoolPQ.mesh.parent) scene.remove(rainPoolPQ.mesh);
-  activeRainPool = perfMode ? rainPoolPQ : rainPoolHQ;
-  if (rainT > 0) setRainInScene(true);
 }
 
 function updateRain(delta) {
@@ -2966,7 +2903,7 @@ let fireflies;
 const FF_SET_ENTER     = 0.15;
 const FF_SET_LEAVE     = 0.05;
 const FF_SLOT_FADE_DUR = 0.3;
-const ffSlots = Array.from({ length: FF_GLOW_HQ }, () => ({
+const ffSlots = Array.from({ length: FF_GLOW }, () => ({
   fireflyIndex: null,
   bri: 0,
 }));
@@ -2974,7 +2911,7 @@ const _ffOccupiedSet = new Set();
 const _ffCandidates = [];
 
 function resetFireflyGrassSlots() {
-  for (let s = 0; s < FF_GLOW_HQ; s++) {
+  for (let s = 0; s < FF_GLOW; s++) {
     ffSlots[s].fireflyIndex = null;
     ffSlots[s].bri = 0;
   }
@@ -3030,7 +2967,7 @@ function updateFireflyGlowInstances(delta) {
     }
   }
 
-  for (let s = 0; s < FF_GLOW_HQ; s++) {
+  for (let s = 0; s < FF_GLOW; s++) {
     const slot = ffSlots[s];
     if (s >= ffGlowSlotCount || slot.fireflyIndex === null || slot.bri < 0.01) {
       _glowDummy.position.set(-9999, 0, 0);
@@ -3088,7 +3025,7 @@ const fireflyGlowMat = new THREE.ShaderMaterial({
 });
 
 const _glowDummy = new THREE.Object3D();
-const fireflyGlowMesh = new THREE.InstancedMesh(fireflyGlowGeo, fireflyGlowMat, FF_GLOW_HQ);
+const fireflyGlowMesh = new THREE.InstancedMesh(fireflyGlowGeo, fireflyGlowMat, FF_GLOW);
 fireflyGlowMesh.frustumCulled = false;
 scene.add(fireflyGlowMesh);
 
@@ -3506,15 +3443,14 @@ const clipMat = new THREE.ShaderMaterial({
   depthWrite: false,
 });
 
-const CLIP_COUNT_HQ = 1200;
-const CLIP_COUNT_PQ = 400;
-let clipPoolMax = CLIP_COUNT_HQ;
+const CLIP_COUNT = 1200;
+const clipPoolMax = CLIP_COUNT;
 
-const clipHeightArr = new Float32Array(CLIP_COUNT_HQ);
-const clipWidthArr  = new Float32Array(CLIP_COUNT_HQ);
-const clipLeanArr   = new Float32Array(CLIP_COUNT_HQ);
-const clipAlphaArr  = new Float32Array(CLIP_COUNT_HQ);
-const clipIsRainArr = new Float32Array(CLIP_COUNT_HQ);
+const clipHeightArr = new Float32Array(CLIP_COUNT);
+const clipWidthArr  = new Float32Array(CLIP_COUNT);
+const clipLeanArr   = new Float32Array(CLIP_COUNT);
+const clipAlphaArr  = new Float32Array(CLIP_COUNT);
+const clipIsRainArr = new Float32Array(CLIP_COUNT);
 
 clipBladeGeo.setAttribute('aClipHeight',
   new THREE.InstancedBufferAttribute(clipHeightArr, 1).setUsage(THREE.DynamicDrawUsage));
@@ -3527,14 +3463,14 @@ clipBladeGeo.setAttribute('aClipAlpha',
 clipBladeGeo.setAttribute('aClipIsRain',
   new THREE.InstancedBufferAttribute(clipIsRainArr, 1).setUsage(THREE.DynamicDrawUsage));
 
-const clipMesh = new THREE.InstancedMesh(clipBladeGeo, clipMat, CLIP_COUNT_HQ);
+const clipMesh = new THREE.InstancedMesh(clipBladeGeo, clipMat, CLIP_COUNT);
 clipMesh.frustumCulled = false;
 clipMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 scene.add(clipMesh);
 
 const _cd = new THREE.Object3D();
 
-const clips = Array.from({ length: CLIP_COUNT_HQ }, () => ({
+const clips = Array.from({ length: CLIP_COUNT }, () => ({
   active: false,
   x: 0, y: 0, z: 0,
   velX: 0, velY: 0, velZ: 0,
@@ -3621,8 +3557,6 @@ function spawnRainDrop(rx, rz, vx, vy, vz) {
   c.lean    = 0;
 }
 
-if (perfMode) applyPerfModeState();
-
 // ── Resize ──────────────────────────────────────────────────────────────────
 function onResize() {
   updateRendererSize();
@@ -3635,13 +3569,10 @@ const btnInfo = document.getElementById('btn-info');
 function logPerfDiagnostics(label) {
   if (!devMode) return;
   const inScene = (m) => m.parent === scene;
-  const tier = (m) => (m === grassNearPQ || m === grassFarPQ || m === grassVeryFarPQ) ? 'PQ' : 'HQ';
   console.log(`--- perf diag: ${label} ---`);
-  console.log('perfMode:', perfMode);
-  console.log('grassNear count:', grassNear.count, tier(grassNear), 'inScene:', inScene(grassNear));
-  console.log('grassFar count:', grassFar.count, tier(grassFar), 'inScene:', inScene(grassFar));
-  console.log('grassVeryFar count:', grassVeryFar.count, tier(grassVeryFar), 'inScene:', inScene(grassVeryFar));
-  console.log('both near tiers in scene:', inScene(grassNearHQ) && inScene(grassNearPQ));
+  console.log('grassNear count:', grassNear.count, 'inScene:', inScene(grassNear));
+  console.log('grassFar count:', grassFar.count, 'inScene:', inScene(grassFar));
+  console.log('grassVeryFar count:', grassVeryFar.count, 'inScene:', inScene(grassVeryFar));
   console.log('scene children:', scene.children.length);
   console.log('DPR:', renderer.getPixelRatio(),
     'canvas:', renderer.domElement.width, 'x', renderer.domElement.height,
@@ -3949,9 +3880,29 @@ function animate() {
     }
   }
 
+  const now = performance.now();
+  frameMs = lastFrameTime > 0 ? now - lastFrameTime : 0;
+  lastFrameTime = now;
+
+  // Poll pending GPU timer result
+  if (_timerExt && _pendingQuery) {
+    const available = _glContext.getQueryParameter(_pendingQuery, _glContext.QUERY_RESULT_AVAILABLE);
+    const disjoint = _glContext.getParameter(_timerExt.GPU_DISJOINT_EXT);
+    if (available && !disjoint) {
+      const nanos = _glContext.getQueryParameter(_pendingQuery, _glContext.QUERY_RESULT);
+      _gpuMs = nanos / 1e6;
+    }
+    if (available || disjoint) {
+      _glContext.deleteQuery(_pendingQuery);
+      _pendingQuery = null;
+    }
+  }
+
   if (!sceneReady) {
     updateCustomCursorScale();
+    const preRender = devMode ? performance.now() : 0;
     renderer.render(scene, camera);
+    finishPerfDiag(preRender, preRender);
     return;
   }
 
@@ -4124,28 +4075,23 @@ function animate() {
   fireflyGlowMat.uniforms.modelViewMatrix.value.copy(camera.matrixWorldInverse);
 
   const preRender = devMode ? performance.now() : 0;
-  renderer.render(scene, camera);
-  if (devMode) {
-    const renderMs = performance.now() - preRender;
-    const cpuMs = preRender - frameStart;
-    renderDiagFrames++;
-    if (renderDiagFrames % 120 === 0) {
-      console.log(
-        'drawCalls:', renderer.info.render.calls,
-        'triangles:', renderer.info.render.triangles,
-        'geometries:', renderer.info.memory.geometries,
-        'textures:', renderer.info.memory.textures,
-        'renderMs:', renderMs.toFixed(2),
-        'cpuMs:', cpuMs.toFixed(2),
-        'perfMode:', perfMode,
-        'DPR:', renderer.getPixelRatio(),
-        'canvas:', renderer.domElement.width + 'x' + renderer.domElement.height,
-        'mapTex:', mapTexSize,
-        'blades:', grassNear.count + grassFar.count + grassVeryFar.count,
-        'rainT:', rainT
-      );
-    }
+
+  // Start GPU timer
+  if (_timerExt) {
+    _gpuQuery = _glContext.createQuery();
+    _glContext.beginQuery(_timerExt.TIME_ELAPSED_EXT, _gpuQuery);
   }
+
+  renderer.render(scene, camera);
+
+  // End GPU timer
+  if (_timerExt && _gpuQuery) {
+    _glContext.endQuery(_timerExt.TIME_ELAPSED_EXT);
+    _pendingQuery = _gpuQuery;
+    _gpuQuery = null;
+  }
+
+  finishPerfDiag(preRender, frameStart);
 }
 
 renderer.setAnimationLoop(() => {
@@ -4160,8 +4106,7 @@ if (devMode) {
   console.log('shadowMap:', renderer.shadowMap.enabled);
 }
 console.log(
-  `Touch Grass WebGL — ${grassNear.count + grassFar.count + grassVeryFar.count} instanced blades`,
-  perfMode ? '(perf)' : '(HQ)'
+  `Touch Grass WebGL — ${grassNear.count + grassFar.count + grassVeryFar.count} instanced blades`
 );
 </script>
 
